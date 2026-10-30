@@ -41,7 +41,7 @@ For a Vite+ frontend:
 
 ```powershell
 #requires -Version 7.0
-vp add 'linen-ui@github:Hezric/Linen#v0.1.0'
+vp add 'linen-ui@git+https://github.com/Hezric/Linen.git#v0.1.0'
 ```
 
 ```js
@@ -86,6 +86,9 @@ vp run build
 The reusable `windows-checks.yml` workflow accepts a Cargo manifest, a frontend
 flag and a build command. `windows-release.yml` packages and verifies signed
 releases. Consumers pin these workflows to the same tag as the library.
+
+Repository policy, release reminders and Dependabot automation are shared too;
+see [repository tooling](docs/features/repository-tooling.md) for their contracts.
 
 [Contributing](CONTRIBUTING.md) · [Shell behavior](docs/features/tray-shell.md)
 · [MIT license](LICENSE) · [Fluent glyph license](packages/linen-ui/glyphs/LICENSE)
