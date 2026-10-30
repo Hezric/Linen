@@ -64,8 +64,8 @@ export function fitPanel(root, invoke) {
     };
 }
 
-export function flyout({name,icon,card,main,settings,gear}) {
-    return `<section class="flyout" aria-label="${name}"><header class="header"><span class="brand-icon">${icon}</span><span class="brand">${name}</span></header>${card}<div id="views">${main}<section id="settings" hidden><div class="settings">${settings}</div></section></div><div id="error-wrap" class="message" aria-hidden="true"><div><p id="error" role="alert"></p></div></div><div class="footer-area"><div class="divider"></div><footer><button id="pause" class="button" type="button"></button><button id="gear" class="button icon-button" aria-expanded="false" aria-controls="settings">${gear}</button></footer></div></section>`;
+export function flyout({name,card,main,settings,gear}) {
+    return `<section class="flyout" aria-label="${name}">${card}<div id="views">${main}<section id="settings" hidden><div class="settings">${settings}</div></section></div><div id="error-wrap" class="message" aria-hidden="true"><div><p id="error" role="alert"></p></div></div><div class="footer-area"><div class="divider"></div><footer><button id="pause" class="button" type="button"></button><button id="gear" class="button icon-button" aria-expanded="false" aria-controls="settings">${gear}</button></footer></div></section>`;
 }
 export const statusCard=(extra='')=>`<div class="current"><span class="badge" id="current-icon"></span><div class="current-copy"><div id="current-name"></div><p id="current-status" role="status"></p></div>${extra}</div>`;
 export const languageSettings=(name,version,open)=>`<h2 id="language-label"></h2><div class="segments" role="group" aria-labelledby="language-label"><button data-language="system"></button><button data-language="zh">简体中文</button><button data-language="en">English</button></div><div class="about"><span>${name} ${version}</span><a id="github" href="https://github.com/Hezric/${name}" target="_blank" rel="noreferrer">GitHub ${open}</a></div>`;

@@ -7,6 +7,8 @@ test('both consumers get one accessible shell with independent main and settings
     const html=flyout({name,icon:'icon',card:statusCard(),main:'<section id="main">content</section>',settings:pauseSettings()+languageSettings(name,'0.1.0','open'),gear:'gear'});
     assert.match(html,new RegExp(`aria-label="${name}"`));
     for(const id of ['current-status','views','settings','pause','gear','pause-error','language-label','github'])assert.equal(html.split(`id="${id}"`).length-1,1,id);
+    assert.match(html, /^<section class="flyout"[^>]*><div class="current">/);
+    assert.doesNotMatch(html, /class="header"|class="brand-icon"/);
     assert.match(html,/aria-controls="settings"/);
     assert.match(html,/aria-describedby="pause-error"/);
     assert.match(html,/role="status"/);

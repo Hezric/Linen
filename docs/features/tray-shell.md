@@ -21,7 +21,12 @@ Escape and close dismiss it and destroy the webview after the exit animation.
 A focus-loss hide consumes a tray click within 300 ms, preventing hide/reopen
 races. Opening and closing are serialized; initialization focus events cannot
 dismiss a window before presentation. WebView2 creation yields synchronous shell
-callbacks. Presentation waits for fonts and renderer frames.
+callbacks. Presentation waits for fonts and renderer frames. The window and WebView2 start
+with the system app theme and the same opaque background as the UI, avoiding
+a default white frame before content paints. Appearance refresh keeps the native
+background in sync. The accessible flyout begins with its status card, without
+an app-name heading. Before showing, the native window is placed at the entry
+origin; the animation then ends at the tray anchor without an initial jump.
 Visibility is set through Tauri before focus is requested. Windows 11's XAML
 overflow popup is explicitly hidden if it remains visible during corner opening.
 
