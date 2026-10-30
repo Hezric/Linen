@@ -138,7 +138,8 @@ fn refresh_icon(app: &AppHandle, frame: usize) {
     let shared = shell(app);
     let (name, light, small) = shared.icon.lock().unwrap().clone();
     let name = if name == "reconnecting" {
-        format!("reconnecting-{}", frame % 3)
+        let frame = if animations_enabled() { frame % 3 } else { 0 };
+        format!("reconnecting-{frame}")
     } else {
         name
     };
@@ -254,7 +255,7 @@ pub fn toggle_flyout(app: &AppHandle) {
     }
     match phase {
         Phase::Opening => create_flyout(app),
-        Phase::Closing => close_window(app),
+        Phase::Closing => close_window(app, previous == Phase::Open),
         _ => {}
     }
 }
@@ -613,8 +614,9 @@ pub async fn prepare_flyout(app: AppHandle, height: f64) -> Result<(), String> {
         let style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
         SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style | WS_EX_LAYERED.0 as isize);
         SetLayeredWindowAttributes(hwnd, COLORREF(0), 0, LWA_ALPHA).map_err(|e| e.to_string())?;
-        let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
     }
+    // Tauri must track visibility before its later focus request can activate the window.
+    window.show().map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -628,23 +630,26 @@ pub async fn present_flyout(app: AppHandle) -> Result<(), String> {
         let window = app
             .get_webview_window("flyout")
             .ok_or("Flyout was closed")?;
-        animate(&window, true)?;
-        if shared.state.lock().unwrap().phase != Phase::Opening {
-            return Ok(());
-        }
-        window.set_focus().map_err(|e| e.to_string())?;
-        shared.state.lock().unwrap().phase = Phase::Open;
-        // Desktop and taskbar clicks need not transfer keyboard focus.
+        let watch_window = window.clone();
+        let watch_app = app.clone();
+        // Desktop/taskbar clicks can leave focus unchanged, including during entry.
         tauri::async_runtime::spawn_blocking(move || {
-            let Ok(handle) = window.hwnd() else {
+            let shared = shell(&watch_app);
+            let Ok(handle) = watch_window.hwnd() else {
                 return;
             };
             let hwnd = HWND(handle.0);
-            let mut down = false;
-            while shared.state.lock().unwrap().phase == Phase::Open {
-                let pressed = unsafe { GetAsyncKeyState(VK_LBUTTON.0 as i32) } < 0
-                    || unsafe { GetAsyncKeyState(VK_RBUTTON.0 as i32) } < 0;
-                if pressed && !down {
+            let pressed = || unsafe {
+                GetAsyncKeyState(VK_LBUTTON.0 as i32) < 0
+                    || GetAsyncKeyState(VK_RBUTTON.0 as i32) < 0
+            };
+            let mut down = pressed();
+            while matches!(
+                shared.state.lock().unwrap().phase,
+                Phase::Opening | Phase::Open
+            ) {
+                let current = pressed();
+                if current && !down {
                     let mut point = POINT::default();
                     let mut bounds = RECT::default();
                     unsafe {
@@ -655,14 +660,37 @@ pub async fn present_flyout(app: AppHandle) -> Result<(), String> {
                                 || point.y < bounds.top
                                 || point.y >= bounds.bottom)
                         {
-                            dismiss(&app, true);
+                            dismiss(&watch_app, true);
                         }
                     }
                 }
-                down = pressed;
+                down = current;
                 std::thread::sleep(Duration::from_millis(16));
             }
         });
+        animate(&window, true)?;
+        if shared.state.lock().unwrap().phase != Phase::Opening {
+            return Ok(());
+        }
+        if shared
+            .geometry
+            .lock()
+            .unwrap()
+            .is_some_and(|g| g.place(400.0).overflow)
+        {
+            // Windows 11 can leave its XAML overflow visible after a tray callback takes focus.
+            unsafe {
+                if let Ok(overflow) = FindWindowW(w!("TopLevelWindowForOverflowXamlIsland"), None)
+                    && IsWindowVisible(overflow).as_bool()
+                {
+                    let _ = ShowWindow(overflow, SW_HIDE);
+                }
+            }
+        }
+        window.set_focus().map_err(|e| e.to_string())?;
+        if !shared.state.lock().unwrap().present() {
+            return Ok(());
+        }
         Ok(())
     })
     .await
@@ -675,16 +703,17 @@ fn dismiss(app: &AppHandle, focus: bool) {
     if matches!(state.phase, Phase::Closed | Phase::Closing) {
         return;
     }
+    let animate = state.phase == Phase::Open;
     state.dismiss(shared.clock.elapsed().as_millis() as u64, focus);
     drop(state);
-    close_window(app);
+    close_window(app, animate);
 }
 
-fn close_window(app: &AppHandle) {
+fn close_window(app: &AppHandle, animated: bool) {
     let app = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
         if let Some(window) = app.get_webview_window("flyout") {
-            if let Err(error) = animate(&window, false) {
+            if animated && let Err(error) = animate(&window, false) {
                 eprintln!("Flyout dismissal: {error}");
             }
             if let Err(error) = window.destroy() {
@@ -718,5 +747,25 @@ pub fn open_project(app: AppHandle) -> Result<(), String> {
         Err("Could not open the project page".into())
     } else {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn artwork_selection_combines_state_theme_mode_and_dpi() {
+        const SIZES: [&[u8]; 5] = [b"16", b"20", b"24", b"32", b"48"];
+        const ART: Artwork = &[("small-paused-light", SIZES), ("protected-dark", SIZES)];
+        assert_eq!(
+            icon_data(ART, "paused", true, true, 1.5),
+            Some(b"24".as_slice())
+        );
+        assert_eq!(
+            icon_data(ART, "protected", false, false, 1.0),
+            Some(b"16".as_slice())
+        );
+        assert_eq!(icon_data(ART, "paused", false, true, 1.5), None);
+        assert_eq!(icon_data(ART, "unknown", true, true, 1.5), None);
     }
 }

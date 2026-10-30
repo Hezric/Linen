@@ -6,7 +6,7 @@ Write public contributions in English. Keep `README_zh-Hans.md` synchronized whe
 
 1. Create a branch named `<type>/<short-desc>`, such as `fix/handle-empty-input`.
 2. Sign every commit with a GitHub-registered signing key. Use scoped Conventional Commits: `fix(parser): handle empty input`. Lowercase where meaning permits; use backticks for technical tokens. PR titles follow the same format. Supported types are feat, fix, perf, refactor, docs, style, test, build, ci, chore, and revert.
-3. Run `cargo test --locked and vp run test` and `vp run build`. Open one PR per coherent stage and explain its behavior and verification.
+3. Run `cargo test --locked`, `vp run test` and `vp run build`. Open one PR per coherent stage and explain its behavior and verification.
 4. Rebase stale branches locally onto main, re-sign rewritten commits, and use `--force-with-lease` only on the development branch. Wait for `test` and `policy` to pass again. Maintainers squash-merge through GitHub using the PR title and body; GitHub signs the resulting commit and deletes the merged branch.
 
 Main requires tested signed commits, strict up-to-date checks, linear history, and forbids force pushes or deletion. Direct pushes require the same signed SHA to have passed CI on another branch against current main. Bots use that flow or open PRs. Dependabot's native branch names are exempt from the branch check; its scoped messages, signatures, and tests remain required. Weekly grouped updates auto squash-merge after green CI.

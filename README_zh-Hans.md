@@ -36,6 +36,7 @@ linen-tray = { git = "https://github.com/Hezric/Linen", tag = "v0.1.0" }
 Vite+ 前端执行：
 
 ```powershell
+#requires -Version 7.0
 vp add 'linen-ui@github:Hezric/Linen#v0.1.0'
 ```
 
@@ -65,6 +66,7 @@ import { buildTray } from 'linen-ui/tooling/tray-icons.mjs';
 与包管理器版本。Windows 还需要 MSVC C++ Build Tools 和 WebView2。
 
 ```powershell
+#requires -Version 7.0
 vp install --frozen-lockfile
 cargo fmt -- --check
 cargo clippy --locked --all-targets -- -D warnings

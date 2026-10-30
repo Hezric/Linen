@@ -22,6 +22,8 @@ A focus-loss hide consumes a tray click within 300 ms, preventing hide/reopen
 races. Opening and closing are serialized; initialization focus events cannot
 dismiss a window before presentation. WebView2 creation yields synchronous shell
 callbacks. Presentation waits for fonts and renderer frames.
+Visibility is set through Tauri before focus is requested. Windows 11's XAML
+overflow popup is explicitly hidden if it remains visible during corner opening.
 
 Motion lasts 200 ms with ease-out timing. Native motion queries Windows client
 area animation settings; UI motion follows live reduced-motion preferences.
