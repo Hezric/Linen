@@ -33,7 +33,8 @@ Linen 通过 GitHub 上签名的发布标签分发，不发布到 npm 或 crates
 linen-tray = { git = "https://github.com/Hezric/Linen", tag = "v0.1.0" }
 ```
 
-Vite+ 前端执行：
+使用 npm 12 的 Vite+ 前端，先在自己的 `.npmrc` 中设置 `allow-git=root`，
+只允许项目清单直接声明的 Git 依赖，再执行：
 
 ```powershell
 #requires -Version 7.0

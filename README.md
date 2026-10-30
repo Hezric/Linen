@@ -37,7 +37,8 @@ registries. Pin both consumers to the same release.
 linen-tray = { git = "https://github.com/Hezric/Linen", tag = "v0.1.0" }
 ```
 
-For a Vite+ frontend:
+For a Vite+ frontend using npm 12, set `allow-git=root` in that frontend's
+`.npmrc` first. This permits Git dependencies declared by the project itself.
 
 ```powershell
 #requires -Version 7.0
