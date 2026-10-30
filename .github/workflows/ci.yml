@@ -2,7 +2,11 @@ name: CI
 on:
   push:
   pull_request:
-    types: [opened, synchronize, reopened, edited]
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - edited
 permissions:
   contents: read
   pull-requests: read
@@ -22,43 +26,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: test '${{ needs.verify.result }}' = success
+  policy-check:
+    uses: ./.github/workflows/project-policy.yml
   policy:
+    needs: policy-check
+    if: always()
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7.0.1
-        with:
-          fetch-depth: 0
-      - uses: commit-check/commit-check-action@v2.18.2
-        with:
-          branch: ${{ github.event_name != 'push' && !startsWith(github.head_ref, 'dependabot/') }}
-          pr-title: ${{ github.event_name == 'pull_request' }}
-      - name: Check exact branch name
-        if: github.event_name == 'pull_request' || github.ref_type == 'branch'
-        env:
-          BRANCH: ${{ github.head_ref || github.ref_name }}
-          EVENT: ${{ github.event_name }}
-        run: |
-          if [[ "$BRANCH" != dependabot/* && ( "$EVENT" == pull_request || "$BRANCH" != main ) ]]; then
-            [[ "$BRANCH" =~ ^(feat|fix|perf|refactor|docs|style|test|build|ci|chore|revert)/[a-z0-9]+(-[a-z0-9]+)*$ ]]
-          fi
-      - name: Check every pushed commit
-        if: github.event_name == 'push'
-        env:
-          BEFORE: ${{ github.event.before }}
-        run: |
-          python3 - <<'PY'
-          import os, re, subprocess, tomllib
-          def git(*args):
-              return subprocess.check_output(['git', *args], text=True).strip()
-          before = os.environ['BEFORE']
-          known = before.strip('0') and subprocess.run(['git', 'cat-file', '-e', before + '^{commit}'], capture_output=True).returncode == 0
-          if not known:
-              main = subprocess.run(['git', 'rev-parse', '--verify', 'origin/main'], capture_output=True, text=True)
-              before = git('merge-base', 'HEAD', 'origin/main') if main.returncode == 0 else ''
-          rev = f'{before}..HEAD' if before else 'HEAD'
-          pattern = tomllib.load(open('cchk.toml', 'rb'))['commit']['message_pattern']
-          for sha in git('rev-list', rev).splitlines():
-              message = git('show', '-s', '--format=%B', sha)
-              if not re.fullmatch(pattern, message):
-                  raise SystemExit(f'{sha}: invalid scoped Conventional Commit: {message.splitlines()[0]}')
-          PY
+      - run: test '${{ needs.policy-check.result }}' = success

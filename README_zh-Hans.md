@@ -37,7 +37,7 @@ Vite+ 前端执行：
 
 ```powershell
 #requires -Version 7.0
-vp add 'linen-ui@github:Hezric/Linen#v0.1.0'
+vp add 'linen-ui@git+https://github.com/Hezric/Linen.git#v0.1.0'
 ```
 
 ```js
@@ -77,6 +77,9 @@ vp run build
 
 可复用的 `windows-checks.yml` 接收 Cargo 清单路径、是否有前端和构建命令。
 `windows-release.yml` 负责打包并校验签名发布。使用方把工作流与库固定到同一个标签。
+
+仓库策略、发布提醒和 Dependabot 自动化也由这里共用；
+具体约定见[仓库工具](docs/features/repository-tooling.md)。
 
 [参与开发](CONTRIBUTING.md) · [托盘行为](docs/features/tray-shell.md)
 · [MIT 许可](LICENSE) · [Fluent 图形许可](packages/linen-ui/glyphs/LICENSE)

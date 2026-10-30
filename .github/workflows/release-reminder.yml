@@ -1,5 +1,10 @@
 name: Release reminder
 on:
+  workflow_call:
+    inputs:
+      scenario:
+        type: string
+        default: normal
   push:
     branches: [main]
   schedule:
