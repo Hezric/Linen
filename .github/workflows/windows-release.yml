@@ -5,6 +5,9 @@ on:
       tag:
         type: string
         required: true
+      frontend:
+        type: boolean
+        default: true
       manifest:
         type: string
         default: src-tauri/Cargo.toml
@@ -16,6 +19,7 @@ permissions:
 jobs:
   release:
     runs-on: windows-latest
+    timeout-minutes: 30
     env:
       RELEASE_TAG: ${{ inputs.tag }}
     steps:
@@ -38,6 +42,7 @@ jobs:
           subject=$(git log -1 --format=%s)
           [[ "$subject" == "chore(release): $RELEASE_TAG" || "$subject" == "chore(release): $RELEASE_TAG (#"*")" ]]
       - uses: voidzero-dev/setup-vp@v1.22.0
+        if: inputs.frontend
         with:
           version: 1.4.0
           run-install: false
@@ -46,8 +51,8 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2.9.3
         with:
-          workspaces: src-tauri -> target
-      - uses: MinoruSekine/setup-scoop@v4
+          workspaces: ${{ inputs.manifest == 'Cargo.toml' && '.' || 'src-tauri' }} -> target
+      - uses: MinoruSekine/setup-scoop@v5.0.1
       - name: Install packaging tools
         shell: pwsh
         run: |
@@ -58,19 +63,23 @@ jobs:
         shell: pwsh
         run: |
           #requires -Version 7.0
-          vp install --frozen-lockfile
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          if ('${{ inputs.frontend }}' -eq 'true') {
+            vp install --frozen-lockfile
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
           cargo fmt --manifest-path ${{ inputs.manifest }} -- --check
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           cargo clippy --manifest-path ${{ inputs.manifest }} --locked --all-targets -- -D warnings
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           cargo test --manifest-path ${{ inputs.manifest }} --locked
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          vp run test
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          if ('${{ inputs.frontend }}' -eq 'true') {
+            vp run test
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
           ${{ inputs.build-command }}
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          $version = yq -r '.version' package.json
+          $version = if ('${{ inputs.frontend }}' -eq 'true') { yq -r '.version' package.json } else { yq -r '.package.version' '${{ inputs.manifest }}' }
           if ("v$version" -ne $env:RELEASE_TAG) { throw 'Tag and package versions differ' }
       - name: Package
         shell: pwsh

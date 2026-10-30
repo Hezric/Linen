@@ -40,6 +40,7 @@ linen-tray = { git = "https://github.com/Hezric/Linen", tag = "v0.1.0" }
 For a Vite+ frontend:
 
 ```powershell
+#requires -Version 7.0
 vp add 'linen-ui@github:Hezric/Linen#v0.1.0'
 ```
 
@@ -73,6 +74,7 @@ Vite+ manages the pinned Node.js LTS runtime and package manager. On Windows,
 install the MSVC C++ Build Tools and WebView2.
 
 ```powershell
+#requires -Version 7.0
 vp install --frozen-lockfile
 cargo fmt -- --check
 cargo clippy --locked --all-targets -- -D warnings

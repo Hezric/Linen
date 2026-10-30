@@ -32,9 +32,19 @@ impl Default for Lifecycle {
 }
 
 impl Lifecycle {
+    pub fn present(&mut self) -> bool {
+        if self.phase != Phase::Opening {
+            return false;
+        }
+        self.phase = Phase::Open;
+        true
+    }
     pub fn toggle(&mut self, now: u64) -> Phase {
         if matches!(self.phase, Phase::Opening | Phase::Open) {
             self.phase = Phase::Closing;
+        } else if self.phase == Phase::Closing {
+            // Consume this click while the focus-loss exit animation is still running.
+            self.focus_hide = None;
         } else if self.phase == Phase::Closed {
             if self
                 .focus_hide
@@ -101,7 +111,7 @@ pub fn placement(
             || r[3] <= r[1]
     });
     let mut x = (anchor[0] + anchor[2] - width) / 2;
-    let mut y = anchor[3] - height;
+    let mut y = (anchor[1] + anchor[3] - height) / 2;
     match edge {
         Edge::Top => y = work[1] + gap,
         Edge::Right => x = work[2] - width - gap,
@@ -155,6 +165,26 @@ pub fn placement(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn cancelled_presentation_cannot_reopen_a_closing_flyout() {
+        let mut state = Lifecycle::default();
+        state.toggle(0);
+        state.dismiss(1, true);
+        assert!(!state.present());
+        assert_eq!(state.phase, Phase::Closing);
+        assert_eq!(state.focus_hide, Some(1));
+    }
+
+    #[test]
+    fn closing_tray_click_is_consumed_before_the_next_open() {
+        let mut state = Lifecycle::default();
+        state.toggle(0);
+        state.present();
+        state.dismiss(1000, true);
+        assert_eq!(state.toggle(1050), Phase::Closing);
+        state.phase = Phase::Closed;
+        assert_eq!(state.toggle(1250), Phase::Opening);
+    }
     #[test]
     fn tray_click_after_focus_loss_closes_instead_of_reopening() {
         let mut state = Lifecycle::default();
@@ -221,6 +251,11 @@ mod tests {
             let p = placement(work, bar, Some(icon), edge, false, 1.0, 400.0);
             assert!(!p.overflow);
             assert_eq!(p.slide, slide);
+            if edge == Edge::Top {
+                assert_eq!((p.bounds[0] + p.bounds[2]) / 2, 510);
+            } else {
+                assert_eq!((p.bounds[1] + p.bounds[3]) / 2, 510);
+            }
             let p = placement(work, bar, None, edge, false, 1.0, 400.0);
             assert!(p.overflow);
             assert_eq!(p.bounds[3], if edge == Edge::Top { 412 } else { 988 });
