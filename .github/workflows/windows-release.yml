@@ -1,0 +1,93 @@
+name: Windows release
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+      manifest:
+        type: string
+        default: src-tauri/Cargo.toml
+      build-command:
+        type: string
+        default: vp exec tauri build --ci --no-bundle -- --locked
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+          ref: refs/tags/${{ inputs.tag }}
+      - name: Validate release source
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          git fetch --force origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          test "$(git cat-file -t "$RELEASE_TAG")" = tag
+          gh api "repos/$GITHUB_REPOSITORY/git/tags/$(git rev-parse "$RELEASE_TAG")" --jq '.verification.verified' | grep -qx true
+          test "$(git rev-parse "$RELEASE_TAG^{}")" = "$(git rev-parse HEAD)"
+          git merge-base --is-ancestor HEAD origin/main
+          subject=$(git log -1 --format=%s)
+          [[ "$subject" == "chore(release): $RELEASE_TAG" || "$subject" == "chore(release): $RELEASE_TAG (#"*")" ]]
+      - uses: voidzero-dev/setup-vp@v1.22.0
+        with:
+          version: 1.4.0
+          run-install: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: src-tauri -> target
+      - uses: MinoruSekine/setup-scoop@v4
+      - name: Install packaging tools
+        shell: pwsh
+        run: |
+          #requires -Version 7.0
+          scoop install yq
+          if (Test-Path ./scripts/scoop/cargo-about.json) { scoop install ./scripts/scoop/cargo-about.json }
+      - name: Check and build
+        shell: pwsh
+        run: |
+          #requires -Version 7.0
+          vp install --frozen-lockfile
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo fmt --manifest-path ${{ inputs.manifest }} -- --check
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo clippy --manifest-path ${{ inputs.manifest }} --locked --all-targets -- -D warnings
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo test --manifest-path ${{ inputs.manifest }} --locked
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          vp run test
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ${{ inputs.build-command }}
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $version = yq -r '.version' package.json
+          if ("v$version" -ne $env:RELEASE_TAG) { throw 'Tag and package versions differ' }
+      - name: Package
+        shell: pwsh
+        run: ./scripts/package.ps1
+      - name: Publish archive and notes
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          #requires -Version 7.0
+          $archives = @(Get-ChildItem -LiteralPath dist -Filter '*.zip')
+          $checksums = $archives | ForEach-Object { "$((Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)" }
+          $checksums | Set-Content -Encoding utf8NoBOM dist/SHA256SUMS
+          $version = $env:RELEASE_TAG.Substring(1)
+          $sections = [regex]::Split([IO.File]::ReadAllText('CHANGELOG.md'), '(?m)^## ')
+          $notes = $sections | Where-Object { $_.StartsWith("[$version]") } | Select-Object -First 1
+          if (!$notes) { throw 'Version has no changelog section' }
+          [IO.File]::WriteAllText('dist/release-notes.md', "## $notes", [Text.UTF8Encoding]::new($false))
+          gh release create $env:RELEASE_TAG $archives.FullName dist/SHA256SUMS --verify-tag --title $env:RELEASE_TAG --notes-file dist/release-notes.md
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }

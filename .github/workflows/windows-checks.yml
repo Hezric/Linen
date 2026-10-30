@@ -1,0 +1,42 @@
+name: Windows checks
+on:
+  workflow_call:
+    inputs:
+      manifest:
+        type: string
+        default: Cargo.toml
+      frontend:
+        type: boolean
+        default: false
+      build-command:
+        type: string
+        default: cargo build --release --locked
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: voidzero-dev/setup-vp@v1.22.0
+        if: inputs.frontend
+        with:
+          version: 1.4.0
+          run-install: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: ${{ inputs.manifest == 'Cargo.toml' && '.' || 'src-tauri' }} -> target
+      - run: vp install --frozen-lockfile
+        if: inputs.frontend
+      - run: cargo fmt --manifest-path ${{ inputs.manifest }} -- --check
+      - run: cargo clippy --manifest-path ${{ inputs.manifest }} --locked --all-targets -- -D warnings
+      - run: cargo test --manifest-path ${{ inputs.manifest }} --locked
+      - run: vp run test
+        if: inputs.frontend
+      - run: ${{ inputs.build-command }}

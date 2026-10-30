@@ -1,0 +1,18 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing signed tag to retry
+        required: true
+permissions:
+  contents: write
+jobs:
+  release:
+    uses: ./.github/workflows/windows-release.yml
+    with:
+      tag: ${{ inputs.tag || github.ref_name }}
+      manifest: Cargo.toml
+      build-command: vp run build

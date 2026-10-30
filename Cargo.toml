@@ -1,0 +1,3 @@
+[workspace]
+members = ["packages/linen-tray"]
+resolver = "2"

@@ -1,0 +1,35 @@
+{
+  "name": "linen-ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./packages/linen-ui/index.js",
+    "./style.css": "./packages/linen-ui/style.css",
+    "./glyphs": "./packages/linen-ui/glyphs.js",
+    "./tooling/*": "./tooling/*"
+  },
+  "scripts": {
+    "test": "node --test packages/linen-ui/*.test.js",
+    "build": "vp build"
+  },
+  "devDependencies": {
+    "vite-plus": "1.4.0"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "26.13.0",
+      "onFail": "download"
+    },
+    "packageManager": {
+      "name": "npm",
+      "version": "12.2.1",
+      "onFail": "download"
+    }
+  },
+  "files": [
+    "packages/linen-ui/",
+    "tooling/"
+  ]
+}
