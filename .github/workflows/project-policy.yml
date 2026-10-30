@@ -37,7 +37,8 @@ jobs:
           known = before.strip('0') and subprocess.run(['git', 'cat-file', '-e', before + '^{commit}'], capture_output=True).returncode == 0
           if not known:
               main = subprocess.run(['git', 'rev-parse', '--verify', 'origin/main'], capture_output=True, text=True)
-              before = git('merge-base', 'HEAD', 'origin/main') if main.returncode == 0 else ''
+              base = subprocess.run(['git', 'merge-base', 'HEAD', 'origin/main'], capture_output=True, text=True) if main.returncode == 0 else None
+              before = base.stdout.strip() if base is not None and base.returncode == 0 else ''
           rev = f'{before}..HEAD' if before else 'HEAD'
           pattern = tomllib.load(open('cchk.toml', 'rb'))['commit']['message_pattern']
           for sha in git('rev-list', rev).splitlines():
