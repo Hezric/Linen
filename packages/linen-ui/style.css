@@ -97,3 +97,6 @@ input[type=range]:active::-webkit-slider-thumb { border-width:6px; }
 .native #app { position:relative; left:0; top:0; width:100%; }
 .native .flyout { border-radius:0; box-shadow:none; }
 :root:has(body.native), body.native { background:var(--bg); }
+
+/* Initial status messages must reach their final height before native entry. */
+body.native:not(.presented) * { transition:none !important; }
