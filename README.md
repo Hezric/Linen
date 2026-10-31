@@ -34,7 +34,7 @@ registries. Pin both consumers to the same release.
 
 ```toml
 [dependencies]
-linen-tray = { git = "https://github.com/Hezric/Linen", tag = "v0.1.1" }
+linen-tray = { git = "https://github.com/Hezric/Linen", tag = "v0.1.2" }
 ```
 
 For a Vite+ frontend using npm 12, set `allow-git=root` in that frontend's
@@ -42,7 +42,7 @@ For a Vite+ frontend using npm 12, set `allow-git=root` in that frontend's
 
 ```powershell
 #requires -Version 7.0
-vp add 'linen-ui@git+https://github.com/Hezric/Linen.git#v0.1.1'
+vp add 'linen-ui@git+https://github.com/Hezric/Linen.git#v0.1.2'
 ```
 
 ```js
@@ -60,7 +60,7 @@ working integration examples. Neither npm nor crates.io receives a release.
 Give an agent this prompt to prepare a checkout:
 
 ```text
-Clone https://github.com/Hezric/Linen and check out signed tag v0.1.1.
+Clone https://github.com/Hezric/Linen and check out signed tag v0.1.2.
 Read AGENTS.md. Install Vite+ from its official guide and the stable MSVC
 Rust toolchain with C++ Build Tools. Run vp install --frozen-lockfile,
 vp run test, cargo test --locked, and vp run build. Keep application state
