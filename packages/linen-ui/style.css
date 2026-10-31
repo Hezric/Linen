@@ -15,10 +15,6 @@ body.native { display:block; padding:0; min-height:0; background:transparent; ov
 .native .flyout { background:var(--bg); }
 :root:has(body.native) { background:transparent; }
 svg { width:20px; height:20px; display:block; fill:currentColor; flex:none; -webkit-user-drag:none; }
-.header { display:flex; align-items:center; gap:8px; padding:2px 2px 10px 4px; }
-.brand { font-weight:600; font-size:14px; flex:1; }
-.brand-icon { color:var(--accent); }
-.header.inactive .brand-icon { color:var(--secondary); }
 button { font:inherit; color:inherit; }
 .button { display:inline-flex; align-items:center; gap:8px; height:32px; padding:0 12px; border-radius:4px; background:var(--control); border:1px solid var(--cardb); color:var(--text); font-size:14px; }
 .button:hover { background:var(--hover); }
@@ -88,7 +84,7 @@ footer { display:flex; align-items:center; justify-content:space-between; paddin
 #volume { display:inline-block; }
 #pause { overflow:hidden; white-space:nowrap; }
 #current-name .copy-current { display:block; overflow:hidden; text-overflow:ellipsis; }
-button,.device-row,.brand-icon,.badge,.tag,.pause-minutes,a { transition:background-color .2s var(--ease-out),color .2s var(--ease-out),border-color .2s var(--ease-out),transform .2s var(--ease-out); }
+button,.device-row,.badge,.tag,.pause-minutes,a { transition:background-color .2s var(--ease-out),color .2s var(--ease-out),border-color .2s var(--ease-out),transform .2s var(--ease-out); }
 button:active { transform:scale(.97); }
 .switch:active::after { width:16px; }
 .segments button:hover { background:var(--hover); }

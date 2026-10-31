@@ -209,6 +209,7 @@ pub fn update_tray(
     if let Some(window) = app.get_webview_window("flyout")
         && let Ok(handle) = window.hwnd()
     {
+        let _ = window.set_background_color(Some(background(appearance.dark)));
         let dark = i32::from(appearance.dark);
         unsafe {
             let _ = DwmSetWindowAttribute(
@@ -278,6 +279,11 @@ pub fn open_flyout(app: &AppHandle) {
     create_flyout(app);
 }
 
+fn background(dark: bool) -> tauri::window::Color {
+    let value = if dark { 42 } else { 247 };
+    tauri::window::Color(value, value, value, 255)
+}
+
 fn create_flyout(app: &AppHandle) {
     let app = app.clone();
     // WebView2 creation must yield the synchronous Windows tray event handler.
@@ -285,12 +291,19 @@ fn create_flyout(app: &AppHandle) {
         let shared = shell(&app);
         let result = (|| -> Result<(), Box<dyn std::error::Error>> {
             *shared.geometry.lock().unwrap() = Some(Geometry::read(&app)?);
+            let dark = crate::registry_light(w!("AppsUseLightTheme")) == 0;
             let window =
                 WebviewWindowBuilder::new(&app, "flyout", WebviewUrl::App("index.html".into()))
                     .title(shared.config.title)
                     .inner_size(360.0, 400.0)
                     .decorations(false)
                     .transparent(false)
+                    .theme(Some(if dark {
+                        tauri::Theme::Dark
+                    } else {
+                        tauri::Theme::Light
+                    }))
+                    .background_color(background(dark))
                     .shadow(true)
                     .resizable(false)
                     .skip_taskbar(true)
@@ -556,6 +569,10 @@ fn animate(window: &WebviewWindow, show: bool) -> Result<(), String> {
         SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style | WS_EX_LAYERED.0 as isize);
     }
     let slide = geometry.place(400.0).slide;
+    if show {
+        bounds.left -= (slide[0] as f64 * geometry.scale).round() as i32;
+        bounds.top -= (slide[1] as f64 * geometry.scale).round() as i32;
+    }
     let start = Instant::now();
     loop {
         if show && shared.state.lock().unwrap().phase != Phase::Opening {
@@ -614,6 +631,27 @@ pub async fn prepare_flyout(app: AppHandle, height: f64) -> Result<(), String> {
         let style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
         SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style | WS_EX_LAYERED.0 as isize);
         SetLayeredWindowAttributes(hwnd, COLORREF(0), 0, LWA_ALPHA).map_err(|e| e.to_string())?;
+    }
+    let geometry = shell(&app)
+        .geometry
+        .lock()
+        .unwrap()
+        .ok_or("Flyout geometry is unavailable")?;
+    let slide = geometry.place(height).slide;
+    let mut bounds = RECT::default();
+    unsafe {
+        GetWindowRect(hwnd, &mut bounds).map_err(|e| e.to_string())?;
+        // The first native frame must start at the same position as the entry animation.
+        SetWindowPos(
+            hwnd,
+            None,
+            bounds.left + (slide[0] as f64 * geometry.scale).round() as i32,
+            bounds.top + (slide[1] as f64 * geometry.scale).round() as i32,
+            0,
+            0,
+            SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER,
+        )
+        .map_err(|e| e.to_string())?;
     }
     // Tauri must track visibility before its later focus request can activate the window.
     window.show().map_err(|e| e.to_string())?;
