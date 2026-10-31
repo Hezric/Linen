@@ -58,7 +58,7 @@ jobs:
         run: |
           #requires -Version 7.0
           scoop install yq
-          if (Test-Path ./scripts/scoop/cargo-about.json) { scoop install ./scripts/scoop/cargo-about.json }
+          if (Test-Path ./scripts/scoop/cargo-about.json) { scoop install (Resolve-Path ./scripts/scoop/cargo-about.json).Path }
       - name: Check and build
         shell: pwsh
         run: |
