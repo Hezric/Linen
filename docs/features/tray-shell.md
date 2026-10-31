@@ -45,6 +45,11 @@ Default. Small artwork occupies 75% of the DPI-selected bitmap canvas.
 
 Native tests cover lifecycle timing, all taskbar edges, negative monitor
 coordinates, DPI, clamping, overflow and RTL, mode detection and image selection.
+Shared rows, headings, settings, the status card and footer leave eight extra
+DIP on their right side. Left insets, icon geometry and the 360-DIP flyout
+width stay fixed; long row names retain ellipsis. The pause-duration input uses
+a neutral border and the shared keyboard focus ring, without an additional
+accent underline; invalid values use an error-colored border.
 UI checks exercise the shared accessible markup; consuming apps retain their
 behavior tests. Native placement, DWM composition, outside clicks, overflow
 light-dismissal and visual motion also require direct Windows inspection.
