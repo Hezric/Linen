@@ -1948,7 +1948,7 @@ dependencies = [
 
 [[package]]
 name = "linen-tray"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "serde",
  "tauri",
