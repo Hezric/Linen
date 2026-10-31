@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.3]
+
+### Fixes
+
+- stabilize native flyout motion (#9)
+
 ## [0.1.2]
 
 ### Fixes

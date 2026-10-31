@@ -30,7 +30,7 @@ Linen 通过 GitHub 上签名的发布标签分发，不发布到 npm 或 crates
 
 ```toml
 [dependencies]
-linen-tray = { git = "https://github.com/Hezric/Linen", tag = "v0.1.2" }
+linen-tray = { git = "https://github.com/Hezric/Linen", tag = "v0.1.3" }
 ```
 
 使用 npm 12 的 Vite+ 前端，先在自己的 `.npmrc` 中设置 `allow-git=root`，
@@ -38,7 +38,7 @@ linen-tray = { git = "https://github.com/Hezric/Linen", tag = "v0.1.2" }
 
 ```powershell
 #requires -Version 7.0
-vp add 'linen-ui@git+https://github.com/Hezric/Linen.git#v0.1.2'
+vp add 'linen-ui@git+https://github.com/Hezric/Linen.git#v0.1.3'
 ```
 
 ```js
@@ -55,7 +55,7 @@ import { buildTray } from 'linen-ui/tooling/tray-icons.mjs';
 可以把下面的提示完整交给智能体：
 
 ```text
-克隆 https://github.com/Hezric/Linen，检出签名标签 v0.1.2。
+克隆 https://github.com/Hezric/Linen，检出签名标签 v0.1.3。
 先读 AGENTS.md。按官方指南准备 Vite+、稳定版 MSVC Rust 工具链和 C++ Build Tools。
 运行 vp install --frozen-lockfile、vp run test、cargo test --locked 和 vp run build。
 应用状态留在使用方；接入依赖时固定 GitHub 标签。检查库时不要启动或重新配置使用方应用。
