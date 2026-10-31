@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.1]
+
+### Fixes
+
+- open themed flyouts without a heading (#6)
+
 ## [0.1.0]
 
 ### Features
