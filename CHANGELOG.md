@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.2]
+
+### Fixes
+
+- resolve local scoop manifest paths
+
 ## [0.1.1]
 
 ### Fixes
