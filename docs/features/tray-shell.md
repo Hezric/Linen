@@ -9,7 +9,7 @@ inside the taskbar open a centered, clamped 360-DIP flyout beside that edge.
 An icon outside the taskbar, or an unavailable rectangle, selects the notification
 corner. Horizontal taskbars use the right corner, or the left in RTL; vertical
 taskbars use their lower end, or upper end in RTL. Corner flyouts enter from the
-screen side; taskbar flyouts rise away from the bar. Exit reverses entry.
+screen side; taskbar flyouts slide a full window away from the bar. Exit reverses entry.
 
 The flyout is an opaque undecorated tool window with DWM non-client rendering,
 system shadow and rounded corners. The frontend does not draw a native-window
@@ -25,12 +25,18 @@ callbacks. Presentation waits for fonts and renderer frames. The window and WebV
 with the system app theme and the same opaque background as the UI, avoiding
 a default white frame before content paints. Appearance refresh keeps the native
 background in sync. The accessible flyout begins with its status card, without
-an app-name heading. Before showing, the native window is placed at the entry
-origin; the animation then ends at the tray anchor without an initial jump.
+an app-name heading. The first layout completes without CSS transitions. Consumers add the body class
+`presented` after `present_flyout` resolves to enable later UI transitions.
+The renderer prepares at the invisible destination before native motion places
+the first opaque frame at the entry origin. DWM display transitions are disabled
+so they cannot scale a window that the shell is already sliding. Resize and
+motion serialize around the resolved destination; motion never infers that
+destination from an in-flight window rectangle.
 Visibility is set through Tauri before focus is requested. Windows 11's XAML
 overflow popup is explicitly hidden if it remains visible during corner opening.
 
-Motion lasts 200 ms with ease-out timing. Native motion queries Windows client
+Native motion lasts 250 ms with cubic ease-out timing and fully opaque content.
+UI content transitions last 200 ms. Native motion queries Windows client
 area animation settings; UI motion follows live reduced-motion preferences.
 Consumers refresh appearance once per second without querying hardware. Newer
 Windows uses the undocumented `Explorer/Advanced/TaskbarSize` value (0 Default,

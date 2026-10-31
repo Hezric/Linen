@@ -36,6 +36,7 @@ struct Shell {
     clock: Instant,
     state: Mutex<Lifecycle>,
     geometry: Mutex<Option<Geometry>>,
+    layout: Mutex<Option<Placement>>,
     icon: Mutex<(String, bool, bool)>,
 }
 
@@ -106,6 +107,7 @@ pub fn install(
         clock: Instant::now(),
         state: Mutex::new(Lifecycle::default()),
         geometry: Mutex::new(None),
+        layout: Mutex::new(None),
         icon: Mutex::new((initial, false, false)),
     }));
     Ok(())
@@ -353,6 +355,13 @@ fn style_window(window: &WebviewWindow) -> Result<(), Box<dyn std::error::Error>
             GWL_EXSTYLE,
             (ex | WS_EX_TOOLWINDOW.0 as isize) & !(WS_EX_APPWINDOW.0 as isize),
         );
+        let disabled = 1i32;
+        DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_TRANSITIONS_FORCEDISABLED,
+            (&disabled as *const i32).cast(),
+            size_of_val(&disabled) as u32,
+        )?;
         let policy = DWMNCRP_ENABLED;
         let corners = DWMWCP_ROUND;
         DwmSetWindowAttribute(
@@ -523,16 +532,28 @@ pub async fn resize_flyout(app: AppHandle, height: f64) -> Result<FlyoutLayout, 
         .get_webview_window("flyout")
         .ok_or("Flyout was closed")?;
     let placement = geometry.place(height);
-    let [x, y, right, bottom] = placement.bounds;
-    window
-        .set_size(tauri::PhysicalSize::new(
-            (right - x) as u32,
-            (bottom - y) as u32,
-        ))
+    tauri::async_runtime::spawn_blocking(move || {
+        // A queued Tauri resize must finish before native motion reads or moves the HWND.
+        let mut layout = shared.layout.lock().unwrap();
+        let (send, receive) = std::sync::mpsc::sync_channel(1);
+        app.run_on_main_thread(move || {
+            let [x, y, right, bottom] = placement.bounds;
+            let result = window
+                .set_size(tauri::PhysicalSize::new(
+                    (right - x) as u32,
+                    (bottom - y) as u32,
+                ))
+                .and_then(|_| window.set_position(tauri::PhysicalPosition::new(x, y)))
+                .map_err(|e| e.to_string());
+            let _ = send.send(result);
+        })
         .map_err(|e| e.to_string())?;
-    window
-        .set_position(tauri::PhysicalPosition::new(x, y))
-        .map_err(|e| e.to_string())?;
+        receive.recv().map_err(|e| e.to_string())??;
+        *layout = Some(placement);
+        Ok::<_, String>(())
+    })
+    .await
+    .map_err(|e| e.to_string())??;
     Ok(FlyoutLayout {
         limit: (geometry.work[3] - geometry.work[1]) as f64 / geometry.scale - 24.0,
     })
@@ -559,27 +580,18 @@ fn animate(window: &WebviewWindow, show: bool) -> Result<(), String> {
         .lock()
         .unwrap()
         .ok_or("Flyout geometry is unavailable")?;
+    let layout = shared.layout.lock().unwrap();
+    let placement = layout.ok_or("Flyout layout is unavailable")?;
     let hwnd = HWND(window.hwnd().map_err(|e| e.to_string())?.0);
-    let mut bounds = RECT::default();
-    unsafe {
-        GetWindowRect(hwnd, &mut bounds).map_err(|e| e.to_string())?;
-    }
-    let style = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) } & !(WS_EX_LAYERED.0 as isize);
-    unsafe {
-        SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style | WS_EX_LAYERED.0 as isize);
-    }
-    let slide = geometry.place(400.0).slide;
-    if show {
-        bounds.left -= (slide[0] as f64 * geometry.scale).round() as i32;
-        bounds.top -= (slide[1] as f64 * geometry.scale).round() as i32;
-    }
+    let slide = placement.slide;
+    let mut reveal = show;
     let start = Instant::now();
     loop {
         if show && shared.state.lock().unwrap().phase != Phase::Opening {
             return Ok(());
         }
         let t = if animations_enabled() {
-            (start.elapsed().as_secs_f64() / 0.2).min(1.0)
+            (start.elapsed().as_secs_f64() / 0.25).min(1.0)
         } else {
             1.0
         };
@@ -589,73 +601,74 @@ fn animate(window: &WebviewWindow, show: bool) -> Result<(), String> {
             SetWindowPos(
                 hwnd,
                 None,
-                bounds.left + (slide[0] as f64 * geometry.scale * distance).round() as i32,
-                bounds.top + (slide[1] as f64 * geometry.scale * distance).round() as i32,
+                placement.bounds[0] + (slide[0] as f64 * geometry.scale * distance).round() as i32,
+                placement.bounds[1] + (slide[1] as f64 * geometry.scale * distance).round() as i32,
                 0,
                 0,
                 SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER,
             )
             .map_err(|e| e.to_string())?;
         }
-        unsafe {
-            SetLayeredWindowAttributes(
-                hwnd,
-                COLORREF(0),
-                (255.0 * (1.0 - distance)).round() as u8,
-                LWA_ALPHA,
-            )
-            .map_err(|e| e.to_string())?;
+        if reveal {
+            unsafe {
+                SetLayeredWindowAttributes(hwnd, COLORREF(0), 255, LWA_ALPHA)
+                    .map_err(|e| e.to_string())?;
+            }
+            reveal = false;
         }
         if t >= 1.0 {
             break;
         }
         std::thread::sleep(Duration::from_millis(8));
     }
-    unsafe {
-        if !show {
+    if !show {
+        unsafe {
             let _ = ShowWindow(hwnd, SW_HIDE);
         }
-        SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style);
     }
     Ok(())
 }
-
 #[tauri::command]
 pub async fn prepare_flyout(app: AppHandle, height: f64) -> Result<(), String> {
     resize_flyout(app.clone(), height).await?;
     let window = app
         .get_webview_window("flyout")
         .ok_or("Flyout was closed")?;
-    let hwnd = HWND(window.hwnd().map_err(|e| e.to_string())?.0);
-    unsafe {
-        let style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
-        SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style | WS_EX_LAYERED.0 as isize);
-        SetLayeredWindowAttributes(hwnd, COLORREF(0), 0, LWA_ALPHA).map_err(|e| e.to_string())?;
-    }
-    let geometry = shell(&app)
-        .geometry
-        .lock()
-        .unwrap()
-        .ok_or("Flyout geometry is unavailable")?;
-    let slide = geometry.place(height).slide;
-    let mut bounds = RECT::default();
-    unsafe {
-        GetWindowRect(hwnd, &mut bounds).map_err(|e| e.to_string())?;
-        // The first native frame must start at the same position as the entry animation.
-        SetWindowPos(
-            hwnd,
-            None,
-            bounds.left + (slide[0] as f64 * geometry.scale).round() as i32,
-            bounds.top + (slide[1] as f64 * geometry.scale).round() as i32,
-            0,
-            0,
-            SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER,
-        )
-        .map_err(|e| e.to_string())?;
-    }
-    // Tauri must track visibility before its later focus request can activate the window.
-    window.show().map_err(|e| e.to_string())?;
-    Ok(())
+    let (send, mut receive) = tauri::async_runtime::channel(1);
+    app.run_on_main_thread(move || {
+        let result = (|| {
+            let hwnd = HWND(window.hwnd().map_err(|e| e.to_string())?.0);
+            let cloak = |value: i32| unsafe {
+                DwmSetWindowAttribute(
+                    hwnd,
+                    DWMWA_CLOAK,
+                    (&value as *const i32).cast(),
+                    size_of_val(&value) as u32,
+                )
+                .map_err(|e| e.to_string())
+            };
+            cloak(1)?;
+            let result = (|| {
+                window.show().map_err(|e| e.to_string())?;
+                // Tao rewrites extended styles on show; set layering only after it has done so.
+                unsafe {
+                    let style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+                    SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style | WS_EX_LAYERED.0 as isize);
+                    SetLayeredWindowAttributes(hwnd, COLORREF(0), 0, LWA_ALPHA)
+                        .map_err(|e| e.to_string())?;
+                }
+                Ok::<_, String>(())
+            })();
+            let uncloaked = cloak(0);
+            result.and(uncloaked)
+        })();
+        let _ = send.try_send(result);
+    })
+    .map_err(|e| e.to_string())?;
+    receive
+        .recv()
+        .await
+        .ok_or("Flyout preparation was interrupted")?
 }
 
 #[tauri::command]

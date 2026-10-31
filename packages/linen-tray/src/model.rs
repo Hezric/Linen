@@ -119,10 +119,10 @@ pub fn placement(
         Edge::Left => x = work[0] + gap,
     }
     let mut slide = match edge {
-        Edge::Top => [0, -12],
-        Edge::Right => [12, 0],
-        Edge::Bottom => [0, 12],
-        Edge::Left => [-12, 0],
+        Edge::Top => [0, -((height + gap) as f64 / scale).round() as i32],
+        Edge::Right => [((width + gap) as f64 / scale).round() as i32, 0],
+        Edge::Bottom => [0, ((height + gap) as f64 / scale).round() as i32],
+        Edge::Left => [-((width + gap) as f64 / scale).round() as i32, 0],
     };
     if overflow {
         match edge {
@@ -165,6 +165,34 @@ pub fn placement(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn taskbar_motion_starts_beyond_the_work_area() {
+        let work = [0, 0, 1920, 1040];
+        for (bar, icon, edge, expected) in [
+            (
+                [0, 1040, 1920, 1080],
+                [1600, 1040, 1620, 1080],
+                Edge::Bottom,
+                [0, 412],
+            ),
+            (
+                [0, -40, 1920, 0],
+                [1600, -40, 1620, 0],
+                Edge::Top,
+                [0, -412],
+            ),
+            (
+                [1920, 0, 1960, 1040],
+                [1920, 800, 1960, 820],
+                Edge::Right,
+                [372, 0],
+            ),
+            ([-40, 0, 0, 1040], [-40, 800, 0, 820], Edge::Left, [-372, 0]),
+        ] {
+            let p = placement(work, bar, Some(icon), edge, false, 1.25, 400.0);
+            assert_eq!(p.slide, expected);
+        }
+    }
     #[test]
     fn cancelled_presentation_cannot_reopen_a_closing_flyout() {
         let mut state = Lifecycle::default();
@@ -239,9 +267,9 @@ mod tests {
         }
         let work = [0, 0, 1600, 1000];
         for (bar, edge, slide) in [
-            ([0, -40, 1600, 0], Edge::Top, [0, -12]),
-            ([1600, 0, 1640, 1000], Edge::Right, [12, 0]),
-            ([-40, 0, 0, 1000], Edge::Left, [-12, 0]),
+            ([0, -40, 1600, 0], Edge::Top, [0, -412]),
+            ([1600, 0, 1640, 1000], Edge::Right, [372, 0]),
+            ([-40, 0, 0, 1000], Edge::Left, [-372, 0]),
         ] {
             let icon = match edge {
                 Edge::Top => [500, -30, 520, -10],
