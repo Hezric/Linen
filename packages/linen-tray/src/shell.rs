@@ -658,13 +658,13 @@ pub fn animations_enabled() -> bool {
 
 fn animate(window: &WebviewWindow, show: bool) -> Result<(), String> {
     let shared = shell(window.app_handle());
+    let layout = shared.layout.lock().unwrap();
+    let placement = layout.ok_or("Flyout layout is unavailable")?;
     let geometry = shared
         .geometry
         .lock()
         .unwrap()
         .ok_or("Flyout geometry is unavailable")?;
-    let layout = shared.layout.lock().unwrap();
-    let placement = layout.ok_or("Flyout layout is unavailable")?;
     let hwnd = HWND(window.hwnd().map_err(|e| e.to_string())?.0);
     let slide = placement.slide;
     let mut reveal = show;
