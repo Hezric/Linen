@@ -62,3 +62,18 @@ test('hidden-window fitting completes before display frames are available',async
   assert.equal(applied.height,300);
   assert.equal(applied.settled,true);
 });
+test('an unchanged open panel refreshes geometry and recovers after the work area grows',async t=>{
+  const root=panelEnvironment(t,300);
+  let limit=800, calls=0, applied;
+  const fit=fitPanel(root,async(_,args)=>{calls++;applied=args;return {limit};});
+  await fit();
+  const initial=calls;
+  limit=200;
+  await fit(true);
+  assert.ok(calls>initial,'unchanged content must still re-read native geometry');
+  assert.equal(applied.height,200);
+  limit=800;
+  await fit(true);
+  await fit(true);
+  assert.equal(applied.height,300,'larger work areas must restore the natural height');
+});
