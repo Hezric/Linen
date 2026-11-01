@@ -537,7 +537,7 @@ pub async fn resize_flyout(
     let window = app
         .get_webview_window("flyout")
         .ok_or("Flyout was closed")?;
-    let limit = ((geometry.work[3] - geometry.work[1]) as f64 / geometry.scale - 41.0)
+    let limit = ((geometry.work[3] - geometry.work[1]) as f64 / geometry.scale - 45.0)
         .floor()
         .max(1.0);
     tauri::async_runtime::spawn_blocking(move || {
@@ -555,7 +555,7 @@ pub async fn resize_flyout(
                     let inner = window.inner_size().map_err(|e| e.to_string())?;
                     let origin = window.outer_position().map_err(|e| e.to_string())?;
                     let client_origin = window.inner_position().map_err(|e| e.to_string())?;
-                    let client_width = (401.0 * geometry.scale)
+                    let client_width = (405.0 * geometry.scale)
                         .round()
                         .min((geometry.work[2] - geometry.work[0]) as f64)
                         as i32;
@@ -578,17 +578,17 @@ pub async fn resize_flyout(
                     }
                     Placement {
                         bounds: [x, y, x + width, y + height],
-                        slide: [(width as f64 / geometry.scale + 8.0).ceil() as i32, 0],
+                        slide: [(width as f64 / geometry.scale + 12.0).ceil() as i32, 0],
                         overflow: geometry.place(1.0).overflow,
                     }
                 };
                 let client = window.inner_size().map_err(|e| e.to_string())?;
                 let outer_origin = window.outer_position().map_err(|e| e.to_string())?;
                 let client_origin = window.inner_position().map_err(|e| e.to_string())?;
-                let edge = (9.0 * geometry.scale).round() as i32;
+                let edge = (13.0 * geometry.scale).round() as i32;
                 let panel_width = (360.0 * geometry.scale)
                     .round()
-                    .min(client.width as f64 - 41.0 * geometry.scale)
+                    .min(client.width as f64 - 45.0 * geometry.scale)
                     .max(1.0) as i32;
                 let bottom = client.height as i32 - edge;
                 let panel = [

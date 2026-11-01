@@ -114,7 +114,7 @@ pub fn placement(
     scale: f64,
     height: f64,
 ) -> Placement {
-    let gap = (8.0 * scale).round() as i32;
+    let gap = (12.0 * scale).round() as i32;
     let width = (360.0 * scale)
         .round()
         .min((work[2] - work[0] - 2 * gap).max(1) as f64) as i32;
@@ -146,9 +146,9 @@ mod tests {
     fn every_tray_location_uses_the_work_area_bottom_right_and_enters_from_the_right() {
         let work = [-1920, 0, 0, 1040];
         for (scale, right, bottom, width, slide) in [
-            (1.0, -8, 1032, 360, 368),
-            (1.25, -10, 1030, 450, 368),
-            (1.5, -12, 1028, 540, 368),
+            (1.0, -12, 1028, 360, 372),
+            (1.25, -15, 1025, 450, 372),
+            (1.5, -18, 1022, 540, 372),
         ] {
             for height in [200.0, 400.0, 2000.0] {
                 for edge in [Edge::Top, Edge::Right, Edge::Bottom, Edge::Left] {
@@ -217,8 +217,8 @@ mod tests {
             assert_eq!(resolved, expected);
             for scale in [1.0, 1.25, 1.5, 2.0] {
                 let p = placement(resolved, bar, None, edge, false, scale, 400.0);
-                assert_eq!(p.bounds[2], expected[2] - (8.0 * scale).round() as i32);
-                assert_eq!(p.bounds[3], expected[3] - (8.0 * scale).round() as i32);
+                assert_eq!(p.bounds[2], expected[2] - (12.0 * scale).round() as i32);
+                assert_eq!(p.bounds[3], expected[3] - (12.0 * scale).round() as i32);
             }
         }
         let work = [-1920, -1080, 0, -48];
@@ -269,12 +269,12 @@ mod tests {
         for icon in [Some([1650, 850, 1670, 870]), None] {
             let p = placement(work, bar, icon, Edge::Bottom, false, 1.0, 400.0);
             assert!(p.overflow);
-            assert_eq!(p.bounds, [1552, 632, 1912, 1032]);
-            assert_eq!(p.slide, [368, 0]);
+            assert_eq!(p.bounds, [1548, 628, 1908, 1028]);
+            assert_eq!(p.slide, [372, 0]);
         }
         let rtl = placement(work, bar, None, Edge::Bottom, true, 1.0, 400.0);
-        assert_eq!(rtl.bounds, [1552, 632, 1912, 1032]);
-        assert_eq!(rtl.slide, [368, 0]);
+        assert_eq!(rtl.bounds, [1548, 628, 1908, 1028]);
+        assert_eq!(rtl.slide, [372, 0]);
     }
 
     #[test]
@@ -288,8 +288,8 @@ mod tests {
             1.0,
             2000.0,
         );
-        assert_eq!(p.bounds, [8, 8, 272, 292]);
-        assert_eq!(p.slide, [272, 0]);
+        assert_eq!(p.bounds, [12, 12, 268, 288]);
+        assert_eq!(p.slide, [268, 0]);
     }
     #[test]
     fn tray_mode_and_dpi_selection_follow_shell_values() {

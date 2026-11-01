@@ -5,9 +5,12 @@ Consumers provide artwork, app identity, a pause callback and translated status;
 their workers retain hardware and settings ownership. Login startup is external.
 
 Every opening uses the tray icon to select its monitor, then docks a clamped
-360-DIP flyout eight DIP inside that monitor's work-area bottom-right corner.
+360-DIP flyout twelve DIP inside that monitor's work-area bottom-right corner.
 The visible outer stroke, rather than the transparent host or blurred shadow, defines
-the eight-DIP gap. The current taskbar rectangle corrects its edge of the reported
+the twelve-DIP gap. This follows Windows Quick Settings: the RootGrid margin in
+ControlCenterPage is twelve DIP at the right and bottom. The renderer adds one
+DIP to its inset because its outline is drawn outside the panel box. The current
+taskbar rectangle corrects its edge of the reported
 work area when shell updates lag a resize. Consumers refresh unchanged open panels
 on their existing one-second UI tick; changes to monitor, DPI or work area resolve
 a new host destination, and every reopening reads geometry again.
