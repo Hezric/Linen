@@ -1,4 +1,6 @@
-use crate::{Appearance, Edge, Lifecycle, Phase, Placement, Rect, dock_work_area, icon_index, placement};
+use crate::{
+    Appearance, Edge, Lifecycle, Phase, Placement, Rect, dock_work_area, icon_index, placement,
+};
 use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant},

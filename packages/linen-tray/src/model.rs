@@ -222,7 +222,10 @@ mod tests {
             }
         }
         let work = [-1920, -1080, 0, -48];
-        assert_eq!(dock_work_area(full, work, [0, 0, 1920, 48], Edge::Bottom), work);
+        assert_eq!(
+            dock_work_area(full, work, [0, 0, 1920, 48], Edge::Bottom),
+            work
+        );
         assert_eq!(dock_work_area(full, work, [0, 0, 0, 0], Edge::Bottom), work);
     }
     #[test]
