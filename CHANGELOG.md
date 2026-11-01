@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.5]
+
+### Fixes
+
+- keep panel motion and system tones consistent (#15)
+
 ## [0.1.4]
 
 ### Fixes
