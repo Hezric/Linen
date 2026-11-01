@@ -54,7 +54,7 @@ Native tests cover lifecycle timing, all taskbar edges, negative monitor
 coordinates, DPI, clamping, overflow and RTL, mode detection and image selection.
 Shared headings, rows, settings and footer use matching extra left and right
 insets relative to the unchanged status card. Its outer left and right margins
-remain equal. The 360-DIP client width and icon geometry stay fixed; long row
+remain equal. The 360-DIP visible panel width and icon geometry stay fixed; long row
 names retain ellipsis. Text inputs reserve a two-pixel bottom border in every state. Focus changes its
 color to the accent without moving the text or adding a full outline; invalid
 input uses the error color. Other controls retain the shared keyboard focus ring.
