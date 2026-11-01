@@ -1,4 +1,4 @@
-use crate::{Appearance, Edge, Lifecycle, Phase, Placement, Rect, icon_index, placement};
+use crate::{Appearance, Edge, Lifecycle, Phase, Placement, Rect, dock_work_area, icon_index, placement};
 use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant},
@@ -388,7 +388,7 @@ fn style_window(window: &WebviewWindow) -> Result<(), Box<dyn std::error::Error>
     Ok(())
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 struct Geometry {
     work: Rect,
     bar: Rect,
@@ -495,7 +495,7 @@ impl Geometry {
             [p.x, p.y, p.x + s.width as i32, p.y + s.height as i32]
         });
         Ok(Self {
-            work,
+            work: dock_work_area(full, work, bar, edge),
             bar,
             icon,
             edge,
@@ -530,11 +530,8 @@ pub async fn resize_flyout(
         return Err("Invalid flyout height".into());
     }
     let shared = shell(&app);
-    let geometry = shared
-        .geometry
-        .lock()
-        .unwrap()
-        .ok_or("Flyout geometry is unavailable")?;
+    let geometry = Geometry::read(&app).map_err(|e| e.to_string())?;
+    let geometry_changed = shared.geometry.lock().unwrap().as_ref() != Some(&geometry);
     let window = app
         .get_webview_window("flyout")
         .ok_or("Flyout was closed")?;
@@ -543,7 +540,7 @@ pub async fn resize_flyout(
         .max(1.0);
     tauri::async_runtime::spawn_blocking(move || {
         let mut layout = shared.layout.lock().unwrap();
-        let existing = *layout;
+        let existing = if geometry_changed { None } else { *layout };
         let surface_shared = shared.clone();
         let (send, receive) = std::sync::mpsc::sync_channel(1);
         app.run_on_main_thread(move || {
@@ -608,7 +605,7 @@ pub async fn resize_flyout(
                 let next = if settled.unwrap_or(false) {
                     wanted
                 } else {
-                    wanted.max(*region_height)
+                    wanted.max(*region_height).min(client.height as i32)
                 };
                 let offset_x = client_origin.x - outer_origin.x;
                 let offset_y = client_origin.y - outer_origin.y;
@@ -635,6 +632,7 @@ pub async fn resize_flyout(
         })
         .map_err(|e| e.to_string())?;
         *layout = Some(receive.recv().map_err(|e| e.to_string())??);
+        *shared.geometry.lock().unwrap() = Some(geometry);
         Ok::<_, String>(())
     })
     .await

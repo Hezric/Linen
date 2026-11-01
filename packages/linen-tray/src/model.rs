@@ -85,6 +85,26 @@ pub struct Placement {
     pub overflow: bool,
 }
 
+// The reported work area can lag a taskbar resize in either direction.
+pub fn dock_work_area(full: Rect, mut work: Rect, taskbar: Rect, edge: Edge) -> Rect {
+    let (axis, value) = match edge {
+        Edge::Top => (1, taskbar[3]),
+        Edge::Right => (2, taskbar[0]),
+        Edge::Bottom => (3, taskbar[1]),
+        Edge::Left => (0, taskbar[2]),
+    };
+    if taskbar[0] < full[2]
+        && taskbar[2] > full[0]
+        && taskbar[1] < full[3]
+        && taskbar[3] > full[1]
+        && taskbar[0] < taskbar[2]
+        && taskbar[1] < taskbar[3]
+    {
+        work[axis] = value.clamp(full[axis % 2], full[axis % 2 + 2]);
+    }
+    work
+}
+
 pub fn placement(
     work: Rect,
     taskbar: Rect,
@@ -157,6 +177,53 @@ mod tests {
                 }
             }
         }
+    }
+    #[test]
+    fn current_taskbar_edges_replace_stale_work_area_reservations() {
+        let full = [-1920, -1080, 0, 0];
+        for (edge, work, bar, expected) in [
+            (
+                Edge::Bottom,
+                [-1920, -1080, 0, -48],
+                [-1920, -32, 0, 0],
+                [-1920, -1080, 0, -32],
+            ),
+            (
+                Edge::Bottom,
+                [-1920, -1080, 0, -32],
+                [-1920, -72, 0, 0],
+                [-1920, -1080, 0, -72],
+            ),
+            (
+                Edge::Top,
+                [-1920, -1032, 0, 0],
+                [-1920, -1080, 0, -1048],
+                [-1920, -1048, 0, 0],
+            ),
+            (
+                Edge::Right,
+                [-1920, -1080, -48, 0],
+                [-32, -1080, 0, 0],
+                [-1920, -1080, -32, 0],
+            ),
+            (
+                Edge::Left,
+                [-1872, -1080, 0, 0],
+                [-1920, -1080, -1888, 0],
+                [-1888, -1080, 0, 0],
+            ),
+        ] {
+            let resolved = dock_work_area(full, work, bar, edge);
+            assert_eq!(resolved, expected);
+            for scale in [1.0, 1.25, 1.5, 2.0] {
+                let p = placement(resolved, bar, None, edge, false, scale, 400.0);
+                assert_eq!(p.bounds[2], expected[2] - (8.0 * scale).round() as i32);
+                assert_eq!(p.bounds[3], expected[3] - (8.0 * scale).round() as i32);
+            }
+        }
+        let work = [-1920, -1080, 0, -48];
+        assert_eq!(dock_work_area(full, work, [0, 0, 1920, 48], Edge::Bottom), work);
+        assert_eq!(dock_work_area(full, work, [0, 0, 0, 0], Edge::Bottom), work);
     }
     #[test]
     fn cancelled_presentation_cannot_reopen_a_closing_flyout() {

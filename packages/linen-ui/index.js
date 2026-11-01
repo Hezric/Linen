@@ -94,7 +94,7 @@ export function fitPanel(root, invoke) {
       if (document.body.classList.contains('presented')) await new Promise(requestAnimationFrame);
     }
   }
-  function fit() {
+  function fit(refresh = false) {
     const max = panel.style.maxHeight;
     panel.style.maxHeight = 'none';
     const previousHeight = panel.style.height;
@@ -109,7 +109,7 @@ export function fitPanel(root, invoke) {
       target = height;
       started = performance.now();
     }
-    if (!pending && current !== target) pending = resize().finally(() => {pending = null;});
+    if (!pending && (refresh === true || current !== target)) pending = resize().finally(() => {pending = null;});
     return pending || Promise.resolve();
   }
   const observer = new ResizeObserver(() => requestAnimationFrame(fit));
