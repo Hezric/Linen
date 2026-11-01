@@ -19,6 +19,12 @@ Labels map ticket state: `ready-for-agent` -> `in-progress` -> `done`; a blocked
 - A direct push must fast-forward main to the exact signed SHA already green on another branch and based on current main. Bot automation follows the same requirement or opens a PR. Keep the main ruleset free of bypass actors.
 - Dependabot branches keep their native `dependabot/` names; their branch check alone is exempt. Scoped messages, tests, signatures, and squash merge still apply. Group updates weekly by ecosystem and allow automatic squash merge after CI.
 
+## Delivery closeout
+
+Finish authorized integration, release, distribution, installation and readback before ending. Close completed issues with evidence, safely remove owned temporary branches and test resources by exact identity, and synchronize both READMEs with the delivered result. Confirm merged PRs or main reachability before branch deletion; preserve unmerged work and unrelated resources.
+
+When whole-repository closeout is explicitly requested, inventory every open issue and PR in the named repositories and give each a real disposition. Close duplicate, obsolete or incompatible proposals with a reason; report unresolved items and their exact blockers. Keep CI, signature and review gates intact, and state actual integration, publication, installation and cleanup status.
+
 ## Release
 
 Release only when the user explicitly asks. Mention the `Release due` issue when present. The reminder opens or updates one issue for a security fix (`fix(security):`), breaking change, five unreleased feat/fix/perf changes, or at least one such change after 30 days. It never releases automatically.
