@@ -1,8 +1,8 @@
-# Linen
-
-A common thread for small, considered programs.
-
-[简体中文](README_zh-Hans.md)
+<div align="center">
+  <h1>Linen</h1>
+  <p>A common thread for small, considered programs.</p>
+  <p>English | <a href="README_zh-Hans.md">简体中文</a></p>
+</div>
 
 Linen is Hezric's shared foundation for open-source software. Its first consumers,
 [Earmuff](https://github.com/Hezric/Earmuff) and
@@ -13,7 +13,7 @@ Fluent-inspired interface.
 
 | Package | Purpose |
 | --- | --- |
-| `linen-tray` | Tauri 2 tray menus, live theme and taskbar artwork, flyout placement, dismissal, native DWM styling and motion. |
+| `linen-tray` | Tauri 2 tray menus, live theme and taskbar artwork, flyout placement, dismissal, native window lifecycle and motion. |
 | `linen-ui` | Framework-free UI components, design tokens, motion and shared Fluent glyphs, for any UI application. |
 | `linen-tooling` | Tray raster/ICO generation, Chinese font subsetting and reusable Windows CI/release workflows. |
 

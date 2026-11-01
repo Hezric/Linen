@@ -12,7 +12,10 @@ use tauri::{
 use windows::{
     Win32::{
         Foundation::{COLORREF, HWND, LPARAM, POINT, RECT},
-        Graphics::Dwm::*,
+        Graphics::{
+            Dwm::*,
+            Gdi::{ClientToScreen, CreateRectRgn, DeleteObject, HGDIOBJ, SetWindowRgn},
+        },
         UI::{Input::KeyboardAndMouse::*, WindowsAndMessaging::*},
     },
     core::w,
@@ -37,6 +40,8 @@ struct Shell {
     state: Mutex<Lifecycle>,
     geometry: Mutex<Option<Geometry>>,
     layout: Mutex<Option<Placement>>,
+    panel: Mutex<Option<Rect>>,
+    region_height: Mutex<i32>,
     icon: Mutex<(String, bool, bool)>,
 }
 
@@ -108,6 +113,8 @@ pub fn install(
         state: Mutex::new(Lifecycle::default()),
         geometry: Mutex::new(None),
         layout: Mutex::new(None),
+        panel: Mutex::new(None),
+        region_height: Mutex::new(0),
         icon: Mutex::new((initial, false, false)),
     }));
     Ok(())
@@ -281,9 +288,8 @@ pub fn open_flyout(app: &AppHandle) {
     create_flyout(app);
 }
 
-fn background(dark: bool) -> tauri::window::Color {
-    let value = if dark { 42 } else { 247 };
-    tauri::window::Color(value, value, value, 255)
+fn background(_dark: bool) -> tauri::window::Color {
+    tauri::window::Color(0, 0, 0, 0)
 }
 
 fn create_flyout(app: &AppHandle) {
@@ -293,20 +299,23 @@ fn create_flyout(app: &AppHandle) {
         let shared = shell(&app);
         let result = (|| -> Result<(), Box<dyn std::error::Error>> {
             *shared.geometry.lock().unwrap() = Some(Geometry::read(&app)?);
+            *shared.layout.lock().unwrap() = None;
+            *shared.panel.lock().unwrap() = None;
+            *shared.region_height.lock().unwrap() = 0;
             let dark = crate::registry_light(w!("AppsUseLightTheme")) == 0;
             let window =
                 WebviewWindowBuilder::new(&app, "flyout", WebviewUrl::App("index.html".into()))
                     .title(shared.config.title)
                     .inner_size(360.0, 400.0)
                     .decorations(false)
-                    .transparent(false)
+                    .transparent(true)
                     .theme(Some(if dark {
                         tauri::Theme::Dark
                     } else {
                         tauri::Theme::Light
                     }))
                     .background_color(background(dark))
-                    .shadow(true)
+                    .shadow(false)
                     .resizable(false)
                     .skip_taskbar(true)
                     .always_on_top(true)
@@ -346,7 +355,6 @@ fn create_flyout(app: &AppHandle) {
 }
 
 fn style_window(window: &WebviewWindow) -> Result<(), Box<dyn std::error::Error>> {
-    use windows::Win32::UI::Controls::MARGINS;
     let hwnd = HWND(window.hwnd()?.0);
     unsafe {
         let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
@@ -362,8 +370,8 @@ fn style_window(window: &WebviewWindow) -> Result<(), Box<dyn std::error::Error>
             (&disabled as *const i32).cast(),
             size_of_val(&disabled) as u32,
         )?;
-        let policy = DWMNCRP_ENABLED;
-        let corners = DWMWCP_ROUND;
+        let policy = DWMNCRP_DISABLED;
+        let corners = DWMWCP_DONOTROUND;
         DwmSetWindowAttribute(
             hwnd,
             DWMWA_NCRENDERING_POLICY,
@@ -375,15 +383,6 @@ fn style_window(window: &WebviewWindow) -> Result<(), Box<dyn std::error::Error>
             DWMWA_WINDOW_CORNER_PREFERENCE,
             (&corners as *const DWM_WINDOW_CORNER_PREFERENCE).cast(),
             size_of_val(&corners) as u32,
-        )?;
-        DwmExtendFrameIntoClientArea(
-            hwnd,
-            &MARGINS {
-                cxLeftWidth: 1,
-                cxRightWidth: 1,
-                cyTopHeight: 1,
-                cyBottomHeight: 1,
-            },
         )?;
     }
     Ok(())
@@ -518,8 +517,16 @@ pub struct FlyoutLayout {
 }
 
 #[tauri::command]
-pub async fn resize_flyout(app: AppHandle, height: f64) -> Result<FlyoutLayout, String> {
-    if !height.is_finite() || height <= 0.0 {
+pub async fn resize_flyout(
+    app: AppHandle,
+    height: f64,
+    settled: Option<bool>,
+    reserve: Option<f64>,
+) -> Result<FlyoutLayout, String> {
+    if !height.is_finite()
+        || height <= 0.0
+        || reserve.is_some_and(|value| !value.is_finite() || value <= 0.0)
+    {
         return Err("Invalid flyout height".into());
     }
     let shared = shell(&app);
@@ -531,32 +538,108 @@ pub async fn resize_flyout(app: AppHandle, height: f64) -> Result<FlyoutLayout, 
     let window = app
         .get_webview_window("flyout")
         .ok_or("Flyout was closed")?;
-    let placement = geometry.place(height);
+    let limit = ((geometry.work[3] - geometry.work[1]) as f64 / geometry.scale - 41.0)
+        .floor()
+        .max(1.0);
     tauri::async_runtime::spawn_blocking(move || {
-        // A queued Tauri resize must finish before native motion reads or moves the HWND.
         let mut layout = shared.layout.lock().unwrap();
+        let existing = *layout;
+        let surface_shared = shared.clone();
         let (send, receive) = std::sync::mpsc::sync_channel(1);
         app.run_on_main_thread(move || {
-            let [x, y, right, bottom] = placement.bounds;
-            let result = window
-                .set_size(tauri::PhysicalSize::new(
-                    (right - x) as u32,
-                    (bottom - y) as u32,
-                ))
-                .and_then(|_| window.set_position(tauri::PhysicalPosition::new(x, y)))
-                .map_err(|e| e.to_string());
+            let result = (|| {
+                let hwnd = HWND(window.hwnd().map_err(|e| e.to_string())?.0);
+                let placement = if let Some(existing) = existing {
+                    existing
+                } else {
+                    let outer = window.outer_size().map_err(|e| e.to_string())?;
+                    let inner = window.inner_size().map_err(|e| e.to_string())?;
+                    let origin = window.outer_position().map_err(|e| e.to_string())?;
+                    let client_origin = window.inner_position().map_err(|e| e.to_string())?;
+                    let client_width = (401.0 * geometry.scale)
+                        .round()
+                        .min((geometry.work[2] - geometry.work[0]) as f64)
+                        as i32;
+                    let client_height = geometry.work[3] - geometry.work[1];
+                    let width = client_width + outer.width as i32 - inner.width as i32;
+                    let height = client_height + outer.height as i32 - inner.height as i32;
+                    let x = geometry.work[2] - client_width - client_origin.x + origin.x;
+                    let y = geometry.work[1] - client_origin.y + origin.y;
+                    unsafe {
+                        SetWindowPos(
+                            hwnd,
+                            None,
+                            x,
+                            y,
+                            width,
+                            height,
+                            SWP_NOACTIVATE | SWP_NOZORDER,
+                        )
+                        .map_err(|e| e.to_string())?;
+                    }
+                    Placement {
+                        bounds: [x, y, x + width, y + height],
+                        slide: [(width as f64 / geometry.scale + 8.0).ceil() as i32, 0],
+                        overflow: geometry.place(1.0).overflow,
+                    }
+                };
+                let client = window.inner_size().map_err(|e| e.to_string())?;
+                let outer_origin = window.outer_position().map_err(|e| e.to_string())?;
+                let client_origin = window.inner_position().map_err(|e| e.to_string())?;
+                let edge = (9.0 * geometry.scale).round() as i32;
+                let panel_width = (360.0 * geometry.scale)
+                    .round()
+                    .min(client.width as f64 - 41.0 * geometry.scale)
+                    .max(1.0) as i32;
+                let bottom = client.height as i32 - edge;
+                let panel = [
+                    client.width as i32 - edge - panel_width,
+                    bottom - (height.min(limit) * geometry.scale).ceil() as i32,
+                    client.width as i32 - edge,
+                    bottom,
+                ];
+                let clip_height = height.max(reserve.unwrap_or(height)).min(limit);
+                let wanted = client.height as i32
+                    - (bottom
+                        - (clip_height * geometry.scale).ceil() as i32
+                        - (32.0 * geometry.scale).ceil() as i32)
+                        .max(0);
+                let mut region_height = surface_shared.region_height.lock().unwrap();
+                let next = if settled.unwrap_or(false) {
+                    wanted
+                } else {
+                    wanted.max(*region_height)
+                };
+                let offset_x = client_origin.x - outer_origin.x;
+                let offset_y = client_origin.y - outer_origin.y;
+                unsafe {
+                    let region = CreateRectRgn(
+                        offset_x,
+                        offset_y + client.height as i32 - next,
+                        offset_x + client.width as i32,
+                        offset_y + client.height as i32,
+                    );
+                    if region.0.is_null() {
+                        return Err(windows::core::Error::from_thread().to_string());
+                    }
+                    if SetWindowRgn(hwnd, Some(region), true) == 0 {
+                        let _ = DeleteObject(HGDIOBJ(region.0));
+                        return Err(windows::core::Error::from_thread().to_string());
+                    }
+                }
+                *region_height = next;
+                *surface_shared.panel.lock().unwrap() = Some(panel);
+                Ok::<_, String>(placement)
+            })();
             let _ = send.send(result);
         })
         .map_err(|e| e.to_string())?;
-        receive.recv().map_err(|e| e.to_string())??;
-        *layout = Some(placement);
+        *layout = Some(receive.recv().map_err(|e| e.to_string())??);
         Ok::<_, String>(())
     })
     .await
     .map_err(|e| e.to_string())??;
-    Ok(FlyoutLayout {
-        limit: (geometry.work[3] - geometry.work[1]) as f64 / geometry.scale - 24.0,
-    })
+    Ok(FlyoutLayout { limit })
 }
 
 pub fn animations_enabled() -> bool {
@@ -630,7 +713,7 @@ fn animate(window: &WebviewWindow, show: bool) -> Result<(), String> {
 }
 #[tauri::command]
 pub async fn prepare_flyout(app: AppHandle, height: f64) -> Result<(), String> {
-    resize_flyout(app.clone(), height).await?;
+    resize_flyout(app.clone(), height, Some(true), None).await?;
     let window = app
         .get_webview_window("flyout")
         .ok_or("Flyout was closed")?;
@@ -702,14 +785,17 @@ pub async fn present_flyout(app: AppHandle) -> Result<(), String> {
                 let current = pressed();
                 if current && !down {
                     let mut point = POINT::default();
-                    let mut bounds = RECT::default();
+                    let mut origin = POINT::default();
+                    let panel = *shared.panel.lock().unwrap();
                     unsafe {
                         if GetCursorPos(&mut point).is_ok()
-                            && GetWindowRect(hwnd, &mut bounds).is_ok()
-                            && (point.x < bounds.left
-                                || point.x >= bounds.right
-                                || point.y < bounds.top
-                                || point.y >= bounds.bottom)
+                            && ClientToScreen(hwnd, &mut origin).as_bool()
+                            && panel.is_some_and(|bounds| {
+                                point.x < origin.x + bounds[0]
+                                    || point.x >= origin.x + bounds[2]
+                                    || point.y < origin.y + bounds[1]
+                                    || point.y >= origin.y + bounds[3]
+                            })
                         {
                             dismiss(&watch_app, true);
                         }

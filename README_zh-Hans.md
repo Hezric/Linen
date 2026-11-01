@@ -1,8 +1,8 @@
-# Linen
-
-把细小而用心的程序，织在一根线上。
-
-[English](README.md)
+<div align="center">
+  <h1>Linen</h1>
+  <p>把细小而用心的程序，织在一根线上。</p>
+  <p><a href="README.md">English</a> | 简体中文</p>
+</div>
 
 Linen 是 Hezric 开源软件的共享基础。最早的两个使用者
 [Earmuff](https://github.com/Hezric/Earmuff) 与
@@ -12,7 +12,7 @@ Linen 是 Hezric 开源软件的共享基础。最早的两个使用者
 
 | 包 | 用途 |
 | --- | --- |
-| `linen-tray` | Tauri 2 托盘菜单、随主题和任务栏模式更新的图标、浮窗定位与关闭、DWM 原生外观和动画。 |
+| `linen-tray` | Tauri 2 托盘菜单、随主题和任务栏模式更新的图标、浮窗定位与关闭、原生窗口生命周期和动画。 |
 | `linen-ui` | 不依赖前端框架的组件、设计变量、动画和共用 Fluent 图形，可用于任何界面程序。 |
 | `linen-tooling` | 托盘 PNG/ICO 生成、中文字体裁剪、可复用 Windows CI 与发布工作流。 |
 

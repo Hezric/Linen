@@ -89,19 +89,18 @@ pub fn placement(
     work: Rect,
     taskbar: Rect,
     icon: Option<Rect>,
-    edge: Edge,
-    rtl: bool,
+    _edge: Edge,
+    _rtl: bool,
     scale: f64,
     height: f64,
 ) -> Placement {
-    let gap = (12.0 * scale).round() as i32;
+    let gap = (8.0 * scale).round() as i32;
     let width = (360.0 * scale)
         .round()
         .min((work[2] - work[0] - 2 * gap).max(1) as f64) as i32;
     let height = (height * scale)
         .round()
         .clamp(1.0, (work[3] - work[1] - 2 * gap).max(1) as f64) as i32;
-    let anchor = icon.unwrap_or([work[2], work[3], work[2], work[3]]);
     let overflow = icon.is_none_or(|r| {
         r[0] < taskbar[0]
             || r[1] < taskbar[1]
@@ -110,51 +109,9 @@ pub fn placement(
             || r[2] <= r[0]
             || r[3] <= r[1]
     });
-    let mut x = (anchor[0] + anchor[2] - width) / 2;
-    let mut y = (anchor[1] + anchor[3] - height) / 2;
-    match edge {
-        Edge::Top => y = work[1] + gap,
-        Edge::Right => x = work[2] - width - gap,
-        Edge::Bottom => y = work[3] - height - gap,
-        Edge::Left => x = work[0] + gap,
-    }
-    let mut slide = match edge {
-        Edge::Top => [0, -((height + gap) as f64 / scale).round() as i32],
-        Edge::Right => [((width + gap) as f64 / scale).round() as i32, 0],
-        Edge::Bottom => [0, ((height + gap) as f64 / scale).round() as i32],
-        Edge::Left => [-((width + gap) as f64 / scale).round() as i32, 0],
-    };
-    if overflow {
-        match edge {
-            Edge::Top | Edge::Bottom => {
-                x = if rtl {
-                    work[0] + gap
-                } else {
-                    work[2] - width - gap
-                };
-                let distance = ((width + gap) as f64 / scale).round() as i32;
-                slide = [if rtl { -distance } else { distance }, 0];
-            }
-            Edge::Left | Edge::Right => {
-                y = if rtl {
-                    work[1] + gap
-                } else {
-                    work[3] - height - gap
-                };
-                let distance = ((width + gap) as f64 / scale).round() as i32;
-                slide = [
-                    if edge == Edge::Left {
-                        -distance
-                    } else {
-                        distance
-                    },
-                    0,
-                ];
-            }
-        }
-    }
-    x = x.clamp(work[0] + gap, (work[2] - width - gap).max(work[0] + gap));
-    y = y.clamp(work[1] + gap, (work[3] - height - gap).max(work[1] + gap));
+    let x = (work[2] - width - gap).max(work[0] + gap);
+    let y = (work[3] - height - gap).max(work[1] + gap);
+    let slide = [((width + gap) as f64 / scale).round() as i32, 0];
     Placement {
         bounds: [x, y, x + width, y + height],
         slide,
@@ -166,31 +123,39 @@ pub fn placement(
 mod tests {
     use super::*;
     #[test]
-    fn taskbar_motion_starts_beyond_the_work_area() {
-        let work = [0, 0, 1920, 1040];
-        for (bar, icon, edge, expected) in [
-            (
-                [0, 1040, 1920, 1080],
-                [1600, 1040, 1620, 1080],
-                Edge::Bottom,
-                [0, 412],
-            ),
-            (
-                [0, -40, 1920, 0],
-                [1600, -40, 1620, 0],
-                Edge::Top,
-                [0, -412],
-            ),
-            (
-                [1920, 0, 1960, 1040],
-                [1920, 800, 1960, 820],
-                Edge::Right,
-                [372, 0],
-            ),
-            ([-40, 0, 0, 1040], [-40, 800, 0, 820], Edge::Left, [-372, 0]),
+    fn every_tray_location_uses_the_work_area_bottom_right_and_enters_from_the_right() {
+        let work = [-1920, 0, 0, 1040];
+        for (scale, right, bottom, width, slide) in [
+            (1.0, -8, 1032, 360, 368),
+            (1.25, -10, 1030, 450, 368),
+            (1.5, -12, 1028, 540, 368),
         ] {
-            let p = placement(work, bar, Some(icon), edge, false, 1.25, 400.0);
-            assert_eq!(p.slide, expected);
+            for height in [200.0, 400.0, 2000.0] {
+                for edge in [Edge::Top, Edge::Right, Edge::Bottom, Edge::Left] {
+                    for icon in [
+                        Some([-970, 1040, -950, 1080]),
+                        Some([-300, 800, -280, 820]),
+                        None,
+                    ] {
+                        for rtl in [false, true] {
+                            let p = placement(
+                                work,
+                                [-1920, 1040, 0, 1080],
+                                icon,
+                                edge,
+                                rtl,
+                                scale,
+                                height,
+                            );
+                            assert_eq!(p.bounds[2], right);
+                            assert_eq!(p.bounds[3], bottom);
+                            assert_eq!(p.bounds[2] - p.bounds[0], width);
+                            assert!(p.bounds[1] >= work[1]);
+                            assert_eq!(p.slide, [slide, 0]);
+                        }
+                    }
+                }
+            }
         }
     }
     #[test]
@@ -234,62 +199,28 @@ mod tests {
         for icon in [Some([1650, 850, 1670, 870]), None] {
             let p = placement(work, bar, icon, Edge::Bottom, false, 1.0, 400.0);
             assert!(p.overflow);
-            assert_eq!(p.bounds, [1548, 628, 1908, 1028]);
-            assert_eq!(p.slide, [372, 0]);
+            assert_eq!(p.bounds, [1552, 632, 1912, 1032]);
+            assert_eq!(p.slide, [368, 0]);
         }
         let rtl = placement(work, bar, None, Edge::Bottom, true, 1.0, 400.0);
-        assert_eq!(rtl.bounds, [12, 628, 372, 1028]);
-        assert_eq!(rtl.slide, [-372, 0]);
+        assert_eq!(rtl.bounds, [1552, 632, 1912, 1032]);
+        assert_eq!(rtl.slide, [368, 0]);
     }
 
     #[test]
-    fn taskbar_placement_centers_clamps_and_preserves_scaled_anchor() {
-        for scale in [1.0, 1.5] {
-            let work = [-1920, 0, 0, 1040];
-            let bar = [-1920, 1040, 0, 1080];
-            let p = placement(
-                work,
-                bar,
-                Some([-970, 1040, -950, 1080]),
-                Edge::Bottom,
-                false,
-                scale,
-                400.0,
-            );
-            assert!(!p.overflow);
-            assert_eq!((p.bounds[0] + p.bounds[2]) / 2, -960);
-            assert_eq!(p.bounds[3], 1040 - (12.0 * scale) as i32);
-            for icon in [[-1920, 1040, -1900, 1080], [-20, 1040, 0, 1080]] {
-                let p = placement(work, bar, Some(icon), Edge::Bottom, false, scale, 2000.0);
-                assert!(p.bounds[0] >= work[0] && p.bounds[2] <= work[2]);
-                assert!(p.bounds[1] >= work[1] && p.bounds[3] <= work[3]);
-            }
-        }
-        let work = [0, 0, 1600, 1000];
-        for (bar, edge, slide) in [
-            ([0, -40, 1600, 0], Edge::Top, [0, -412]),
-            ([1600, 0, 1640, 1000], Edge::Right, [372, 0]),
-            ([-40, 0, 0, 1000], Edge::Left, [-372, 0]),
-        ] {
-            let icon = match edge {
-                Edge::Top => [500, -30, 520, -10],
-                Edge::Right => [1610, 500, 1630, 520],
-                _ => [-30, 500, -10, 520],
-            };
-            let p = placement(work, bar, Some(icon), edge, false, 1.0, 400.0);
-            assert!(!p.overflow);
-            assert_eq!(p.slide, slide);
-            if edge == Edge::Top {
-                assert_eq!((p.bounds[0] + p.bounds[2]) / 2, 510);
-            } else {
-                assert_eq!((p.bounds[1] + p.bounds[3]) / 2, 510);
-            }
-            let p = placement(work, bar, None, edge, false, 1.0, 400.0);
-            assert!(p.overflow);
-            assert_eq!(p.bounds[3], if edge == Edge::Top { 412 } else { 988 });
-        }
+    fn small_work_areas_keep_the_panel_visible() {
+        let p = placement(
+            [0, 0, 280, 300],
+            [0, 300, 280, 340],
+            None,
+            Edge::Bottom,
+            false,
+            1.0,
+            2000.0,
+        );
+        assert_eq!(p.bounds, [8, 8, 272, 292]);
+        assert_eq!(p.slide, [272, 0]);
     }
-
     #[test]
     fn tray_mode_and_dpi_selection_follow_shell_values() {
         for (current, legacy, small) in [
