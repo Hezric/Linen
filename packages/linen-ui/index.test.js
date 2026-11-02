@@ -77,6 +77,32 @@ test('an unchanged open panel refreshes geometry and recovers after the work are
   await fit(true);
   assert.equal(applied.height,300,'larger work areas must restore the natural height');
 });
+test('shrinking keeps the live material inside the DOM until its smaller clip is acknowledged', async t=>{
+  const root=panelEnvironment(t,300), panel=root.querySelector('.flyout');
+  const entered=Promise.withResolvers(), release=Promise.withResolvers();
+  let shrinking=false;
+  const fit=fitPanel(root,async(_,args)=>{
+    if(shrinking && args.height===180 && !args.settled) {
+      assert.equal(panel.style.height,'300px','the old card must contain the material until native clip commit');
+      assert.equal(panel.dataset.backdrop,'true','material stays active during a transition');
+      entered.resolve();
+      await release.promise;
+    }
+    return {limit:800,backdrop:true};
+  });
+  await fit();
+  shrinking=true;
+  panel.scrollHeight=180;
+  const pending=fit();
+  const state=await Promise.race([entered.promise.then(()=> 'waiting'),pending.then(()=> 'finished')]);
+  assert.equal(state,'waiting');
+  assert.equal(panel.style.height,'300px');
+  release.resolve();
+  await pending;
+  assert.equal(panel.style.height,'180px');
+  assert.equal(panel.dataset.backdrop,'true');
+});
+
 test('shrinking waits for native backdrop suspension before changing DOM height', async t=>{
   const root=panelEnvironment(t,300), panel=root.querySelector('.flyout');
   const calls=[];

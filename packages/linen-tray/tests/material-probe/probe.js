@@ -15,10 +15,11 @@ addEventListener('DOMContentLoaded', async () => {
     };
     const record = async stage => {
       await frames();
-      if (window.probeMode === 'fallback' || stage.includes('-frame-')) {
+      if (window.probeMode === 'fallback') {
         const expected = window.probeTheme === 'dark' ? 'rgb(28, 28, 28)' : 'rgb(238, 238, 238)';
         if (getComputedStyle(panel).backgroundColor !== expected) throw Error('Opaque fallback was not rendered');
       }
+      if (window.probeMode === 'material' && panel.dataset.backdrop !== 'true') throw Error('Material disappeared during transition');
       const r = panel.getBoundingClientRect();
       await invoke('record_frame', { stage, panel: [r.left, r.top, r.right, r.bottom] });
     };
