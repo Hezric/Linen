@@ -1,0 +1,7 @@
+{
+  "productName": "Linen material CI",
+  "version": "0.0.0",
+  "identifier": "dev.linen.material-ci",
+  "build": { "frontendDist": "assets" },
+  "app": { "windows": [] }
+}

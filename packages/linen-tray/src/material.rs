@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use windows::{
     System::{DispatcherQueue, DispatcherQueueController},
     UI::{
@@ -20,6 +20,7 @@ use windows::{
 };
 
 thread_local! {
+    static SUSPENDED: Cell<bool> = const { Cell::new(true) };
     static QUEUE: RefCell<Option<DispatcherQueueController>> = const { RefCell::new(None) };
     static SURFACE: RefCell<Option<(isize, windows::core::Result<Material>)>> = const { RefCell::new(None) };
 }
@@ -88,7 +89,13 @@ impl Material {
 }
 
 // Confine the desktop brush to the card; the fixed host also contains transparent shadow space.
-pub(crate) fn update(hwnd: HWND, panel: crate::Rect, scale: f64) -> bool {
+pub(crate) fn update(hwnd: HWND, panel: crate::Rect, scale: f64, settled: bool) -> bool {
+    if settled {
+        SUSPENDED.with(|flag| flag.set(false));
+    }
+    if SUSPENDED.with(Cell::get) {
+        return false;
+    }
     let enabled = UISettings::new()
         .and_then(|settings| settings.AdvancedEffectsEnabled())
         .unwrap_or(false)
@@ -125,7 +132,35 @@ pub(crate) fn update(hwnd: HWND, panel: crate::Rect, scale: f64) -> bool {
     })
 }
 
+pub(crate) async fn suspend(app: &tauri::AppHandle) -> Result<(), String> {
+    let (send, mut receive) = tauri::async_runtime::channel(1);
+    app.run_on_main_thread(move || {
+        SUSPENDED.with(|flag| flag.set(true));
+        let commit = SURFACE.with(|slot| {
+            let slot = slot.borrow();
+            if let Some((_, Ok(surface))) = slot.as_ref() {
+                surface.visual.SetIsVisible(false)?;
+                surface._target.Compositor()?.RequestCommitAsync().map(Some)
+            } else {
+                Ok(None)
+            }
+        });
+        let _ = send.try_send(commit);
+    })
+    .map_err(|error| error.to_string())?;
+    let commit = receive
+        .recv()
+        .await
+        .ok_or("Backdrop suspension was interrupted")?
+        .map_err(|error| error.to_string())?;
+    if let Some(commit) = commit {
+        commit.await.map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
 pub(crate) fn remove() {
+    SUSPENDED.with(|flag| flag.set(true));
     SURFACE.with(|slot| *slot.borrow_mut() = None);
 }
 

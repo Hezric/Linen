@@ -62,10 +62,13 @@ export function fitPanel(root, invoke) {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   let current = 0, target = 0, from = 0, started = 0, limit = Infinity, reserved = 0, pending = null;
   async function resize() {
+    let suspended = false;
     while (true) {
-      if (target > reserved) {
-        const reservation = target;
+      if (target > reserved || (current !== target && !suspended)) {
+        const reservation = Math.max(current || from, target);
         const layout = await invoke('resize_flyout', {height:current || from, reserve:reservation});
+        panel.dataset.backdrop = String(layout.backdrop === true);
+        suspended = true;
         limit = Math.floor(layout.limit);
         reserved = Math.min(reservation, limit);
         panel.style.maxHeight = limit + 'px';
@@ -88,7 +91,8 @@ export function fitPanel(root, invoke) {
           await new Promise(requestAnimationFrame);
         }
         if (current !== target) continue;
-        await invoke('resize_flyout', {height:current, settled:true});
+        const settled = await invoke('resize_flyout', {height:current, settled:true});
+        panel.dataset.backdrop = String(settled.backdrop === true);
         reserved = current;
         if (current === target) return;
       }
