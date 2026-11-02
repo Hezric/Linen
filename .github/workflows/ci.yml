@@ -14,13 +14,20 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  scope:
+    # The source archive includes every tracked file; no docs bypass applies here.
+    uses: ./.github/workflows/change-scope.yml
   verify:
+    needs: scope
+    if: needs.scope.outputs.docs-only != 'true'
     uses: ./.github/workflows/windows-checks.yml
     with:
       manifest: Cargo.toml
       frontend: true
       build-command: vp run build
   material:
+    needs: scope
+    if: needs.scope.outputs.docs-only != 'true'
     runs-on: windows-11-arm
     timeout-minutes: 15
     steps:
@@ -37,6 +44,8 @@ jobs:
           name: native-material
           path: material-probe-results/
   build-cache:
+    needs: scope
+    if: needs.scope.outputs.docs-only != 'true'
     runs-on: windows-latest
     timeout-minutes: 5
     steps:
@@ -44,13 +53,19 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: pwsh -NoProfile -File scripts/test-build-cache.ps1
   test:
-    needs: [verify, material, build-cache]
+    needs: [scope, verify, material, build-cache]
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - run: test '${{ needs.verify.result }}' = success
-      - run: test '${{ needs.build-cache.result }}' = success
-      - run: test '${{ needs.material.result }}' = success
+      - env:
+          DOCS_ONLY: ${{ needs.scope.outputs.docs-only }}
+        run: |
+          test '${{ needs.scope.result }}' = success
+          expected=success
+          if [[ "$DOCS_ONLY" == true ]]; then expected=skipped; fi
+          for result in '${{ needs.verify.result }}' '${{ needs.material.result }}' '${{ needs.build-cache.result }}'; do
+            test "$result" = "$expected"
+          done
   policy-check:
     uses: ./.github/workflows/project-policy.yml
   policy:

@@ -1,0 +1,59 @@
+name: Change scope
+on:
+  workflow_call:
+    inputs:
+      documentation-files:
+        description: Exact non-packaged files that no build or test reads, one per line
+        type: string
+        default: ''
+    outputs:
+      docs-only:
+        value: ${{ jobs.scope.outputs.docs-only }}
+permissions:
+  contents: read
+jobs:
+  scope:
+    runs-on: ubuntu-latest
+    outputs:
+      docs-only: ${{ steps.diff.outputs.docs-only }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+      - id: diff
+        name: Classify the complete changed-file set
+        env:
+          DOCUMENTATION_FILES: ${{ inputs.documentation-files }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          BEFORE: ${{ github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess
+          def git(*args):
+              return subprocess.check_output(['git', *args])
+          allowed = set(os.environ['DOCUMENTATION_FILES'].splitlines()) - {''}
+          docs_only, files = False, []
+          try:
+              event = os.environ['EVENT_NAME']
+              if event == 'pull_request':
+                  head = os.environ['PR_HEAD']
+                  base = git('merge-base', os.environ['PR_BASE'], head).decode().strip()
+              elif event == 'push' and os.environ['REF_TYPE'] == 'branch':
+                  head = 'HEAD'
+                  base = os.environ['BEFORE']
+                  if not base or not base.strip('0'):
+                      base = git('merge-base', 'HEAD', 'origin/main').decode().strip()
+              else:
+                  raise ValueError('Full checks for this event')
+              files = git('diff', '--no-renames', '--name-only', '-z', base, head).decode().split('\0')
+              files = [name for name in files if name]
+              docs_only = bool(files) and all(name in allowed for name in files)
+          except (subprocess.CalledProcessError, ValueError, UnicodeError) as error:
+              print(f'Full checks: {error}')
+          print(json.dumps({'files': files, 'docs_only': docs_only}))
+          with pathlib.Path(os.environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as output:
+              output.write(f'docs-only={str(docs_only).lower()}\n')
+          PY

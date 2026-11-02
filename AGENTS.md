@@ -31,7 +31,7 @@ When whole-repository closeout is explicitly requested, inventory every open iss
 
 Release only when the user explicitly asks. Mention the `Release due` issue when present. The reminder opens or updates one issue for a security fix (`fix(security):`), breaking change, five unreleased feat/fix/perf changes, or at least one such change after 30 days. It never releases automatically.
 
-Merge product changes in their own PRs under descriptive scoped Conventional Commit titles, with details in the PR body. A `chore(release): vX.Y.Z` PR and commit contain only version bumps, changelog updates and lockfile version fields. Preserve merged history.
+Ship an immediate change with its version bump and changelog in the same PR under a descriptive scoped Conventional Commit title. A release without an accompanying change uses a separate `chore(release): vX.Y.Z` PR containing only version bumps, changelog updates and lockfile version fields. Preserve merged history and never move an existing tag.
 
 Use git-cliff with `cliff.toml` to determine the next SemVer and update `CHANGELOG.md`; bump `package.json` and `packages/linen-tray/Cargo.toml` consistently, including their lockfile version fields. After its tested squash merge, verify the commit, create and verify a signed annotated `vX.Y.Z` tag on that commit, then push the tag. The release workflow tests, builds artifacts and SHA256, and publishes notes from that version's changelog section. Verify the Release and downloaded checksums. Protected `v*` tags are immutable; fix a bad release with a new version.
 
