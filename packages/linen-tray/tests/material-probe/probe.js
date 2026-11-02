@@ -64,9 +64,9 @@ addEventListener('DOMContentLoaded', async () => {
       const changes = samples.filter((value, index) => !index || value.height !== samples[index-1].height);
       const intervals = samples.slice(1).map((value,index)=>value.time-samples[index].time).sort((a,b)=>a-b);
       const refresh = intervals[Math.floor(intervals.length/2)];
-      const moving = changes.filter(value=>Math.abs(value.height-panel.getBoundingClientRect().height)>3);
+      const moving = changes.slice(1).filter(value=>Math.abs(value.height-panel.getBoundingClientRect().height)>3);
       const maxChangeGap = Math.max(...moving.slice(1).map((value,index)=>value.time-moving[index].time));
-      pacing.push({name, duration:performance.now()-start, refresh, maxChangeGap, samples, calls, changes});
+      pacing.push({name, duration:performance.now()-start, startDelay:changes[1]?.time-start, refresh, maxChangeGap, samples, calls, changes});
       calls = null;
       if (changes.length < 8 || maxChangeGap > refresh * 2.5)
         throw Error(`${name} height animation stalled: ${changes.length} changes, gap ${maxChangeGap}ms, refresh ${refresh}ms`);

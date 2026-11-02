@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.8]
+
+### Fixes
+
+- render height independently of native commits
+
+- keep installed runtime identity stable
+
 ## [0.1.7]
 
 ### Fixes
