@@ -1,5 +1,7 @@
 mod model;
 pub use model::*;
+mod launch;
+pub use launch::relaunch_from_runtime;
 
 #[cfg(windows)]
 mod appearance;

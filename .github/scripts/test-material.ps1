@@ -23,6 +23,18 @@ try {
                     if (!(Test-Path -LiteralPath $marker)) { Start-Sleep -Milliseconds 10; continue }
                     $meta = Get-Content -LiteralPath $marker -Raw | ConvertFrom-Json
                     $records += $meta
+                    if ($meta.stage -in @('initial','shrink-frame-2','grow-frame-2','shrink-settled','grow-settled')) {
+                        Add-Type -AssemblyName System.Drawing
+                        $image = [Drawing.Bitmap]::new($meta.width, $meta.height)
+                        $graphics = [Drawing.Graphics]::FromImage($image)
+                        try {
+                            $graphics.CopyFromScreen($meta.x, $meta.y, 0, 0, $image.Size)
+                            $image.Save((Join-Path $root "$theme-$mode-$($meta.stage).png"))
+                        } finally {
+                            $graphics.Dispose()
+                            $image.Dispose()
+                        }
+                    }
                     Copy-Item -LiteralPath $marker -Destination (Join-Path $root "$theme-$mode-$($meta.stage).json")
                     Remove-Item -LiteralPath $marker
                     [IO.File]::WriteAllText([IO.Path]::ChangeExtension($marker, 'ack'), '')

@@ -118,9 +118,7 @@ export function fitPanel(root, invoke) {
         }
         if (current !== target || brush !== target) {await frame(); continue;}
       } else {
-      const progress = document.body.classList.contains('presented') && !reduced.matches
-        ? Math.min(1, (performance.now() - started) / 200) : 1;
-      const height = Math.ceil(from + (target - from) * (1 - (1 - progress) ** 3));
+      const height = target;
       // Grow the card before its brush; shrink the committed brush before its card.
       if (height >= current) {
         panel.style.height = height + 'px';
@@ -133,6 +131,7 @@ export function fitPanel(root, invoke) {
       panel.style.height = height + 'px';
       panel.dataset.backdrop = String(layout.backdrop === true);
       current = height;
+      brush = requested = height;
       limit = Math.floor(layout.limit);
       if (target > limit) {from = Math.min(current, limit); target = limit; started = performance.now();}
       panel.style.maxHeight = `${limit}px`;
