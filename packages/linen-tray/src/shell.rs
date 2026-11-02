@@ -1,4 +1,6 @@
-use crate::{Appearance, Edge, Lifecycle, Phase, Placement, Rect, icon_index, placement};
+use crate::{
+    Appearance, Edge, Lifecycle, Phase, Placement, Rect, dock_work_area, icon_index, placement,
+};
 use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant},
@@ -324,6 +326,9 @@ fn create_flyout(app: &AppHandle) {
             style_window(&window)?;
             let handle = window.clone();
             window.on_window_event(move |event| {
+                if matches!(event, tauri::WindowEvent::Destroyed) {
+                    crate::material::remove();
+                }
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                     api.prevent_close();
                 }
@@ -388,7 +393,7 @@ fn style_window(window: &WebviewWindow) -> Result<(), Box<dyn std::error::Error>
     Ok(())
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 struct Geometry {
     work: Rect,
     bar: Rect,
@@ -495,7 +500,7 @@ impl Geometry {
             [p.x, p.y, p.x + s.width as i32, p.y + s.height as i32]
         });
         Ok(Self {
-            work,
+            work: dock_work_area(full, work, bar, edge),
             bar,
             icon,
             edge,
@@ -514,6 +519,7 @@ impl Geometry {
 #[serde(rename_all = "camelCase")]
 pub struct FlyoutLayout {
     limit: f64,
+    backdrop: bool,
 }
 
 #[tauri::command]
@@ -530,20 +536,20 @@ pub async fn resize_flyout(
         return Err("Invalid flyout height".into());
     }
     let shared = shell(&app);
-    let geometry = shared
-        .geometry
-        .lock()
-        .unwrap()
-        .ok_or("Flyout geometry is unavailable")?;
+    let geometry = Geometry::read(&app).map_err(|e| e.to_string())?;
+    let geometry_changed = shared.geometry.lock().unwrap().as_ref() != Some(&geometry);
     let window = app
         .get_webview_window("flyout")
         .ok_or("Flyout was closed")?;
-    let limit = ((geometry.work[3] - geometry.work[1]) as f64 / geometry.scale - 41.0)
+    let limit = ((geometry.work[3] - geometry.work[1]) as f64 / geometry.scale - 45.0)
         .floor()
         .max(1.0);
-    tauri::async_runtime::spawn_blocking(move || {
+    if geometry_changed || reserve.is_some() {
+        crate::material::suspend(&app).await?;
+    }
+    let backdrop = tauri::async_runtime::spawn_blocking(move || {
         let mut layout = shared.layout.lock().unwrap();
-        let existing = *layout;
+        let existing = if geometry_changed { None } else { *layout };
         let surface_shared = shared.clone();
         let (send, receive) = std::sync::mpsc::sync_channel(1);
         app.run_on_main_thread(move || {
@@ -556,7 +562,7 @@ pub async fn resize_flyout(
                     let inner = window.inner_size().map_err(|e| e.to_string())?;
                     let origin = window.outer_position().map_err(|e| e.to_string())?;
                     let client_origin = window.inner_position().map_err(|e| e.to_string())?;
-                    let client_width = (401.0 * geometry.scale)
+                    let client_width = (405.0 * geometry.scale)
                         .round()
                         .min((geometry.work[2] - geometry.work[0]) as f64)
                         as i32;
@@ -579,17 +585,17 @@ pub async fn resize_flyout(
                     }
                     Placement {
                         bounds: [x, y, x + width, y + height],
-                        slide: [(width as f64 / geometry.scale + 8.0).ceil() as i32, 0],
+                        slide: [(width as f64 / geometry.scale + 12.0).ceil() as i32, 0],
                         overflow: geometry.place(1.0).overflow,
                     }
                 };
                 let client = window.inner_size().map_err(|e| e.to_string())?;
                 let outer_origin = window.outer_position().map_err(|e| e.to_string())?;
                 let client_origin = window.inner_position().map_err(|e| e.to_string())?;
-                let edge = (9.0 * geometry.scale).round() as i32;
+                let edge = (13.0 * geometry.scale).round() as i32;
                 let panel_width = (360.0 * geometry.scale)
                     .round()
-                    .min(client.width as f64 - 41.0 * geometry.scale)
+                    .min(client.width as f64 - 45.0 * geometry.scale)
                     .max(1.0) as i32;
                 let bottom = client.height as i32 - edge;
                 let panel = [
@@ -608,7 +614,7 @@ pub async fn resize_flyout(
                 let next = if settled.unwrap_or(false) {
                     wanted
                 } else {
-                    wanted.max(*region_height)
+                    wanted.max(*region_height).min(client.height as i32)
                 };
                 let offset_x = client_origin.x - outer_origin.x;
                 let offset_y = client_origin.y - outer_origin.y;
@@ -629,17 +635,22 @@ pub async fn resize_flyout(
                 }
                 *region_height = next;
                 *surface_shared.panel.lock().unwrap() = Some(panel);
-                Ok::<_, String>(placement)
+                Ok::<_, String>((
+                    placement,
+                    crate::material::update(hwnd, panel, geometry.scale, settled.unwrap_or(false)),
+                ))
             })();
             let _ = send.send(result);
         })
         .map_err(|e| e.to_string())?;
-        *layout = Some(receive.recv().map_err(|e| e.to_string())??);
-        Ok::<_, String>(())
+        let (placement, backdrop) = receive.recv().map_err(|e| e.to_string())??;
+        *layout = Some(placement);
+        *shared.geometry.lock().unwrap() = Some(geometry);
+        Ok::<_, String>(backdrop)
     })
     .await
     .map_err(|e| e.to_string())??;
-    Ok(FlyoutLayout { limit })
+    Ok(FlyoutLayout { limit, backdrop })
 }
 
 pub fn animations_enabled() -> bool {
@@ -658,13 +669,13 @@ pub fn animations_enabled() -> bool {
 
 fn animate(window: &WebviewWindow, show: bool) -> Result<(), String> {
     let shared = shell(window.app_handle());
+    let layout = shared.layout.lock().unwrap();
+    let placement = layout.ok_or("Flyout layout is unavailable")?;
     let geometry = shared
         .geometry
         .lock()
         .unwrap()
         .ok_or("Flyout geometry is unavailable")?;
-    let layout = shared.layout.lock().unwrap();
-    let placement = layout.ok_or("Flyout layout is unavailable")?;
     let hwnd = HWND(window.hwnd().map_err(|e| e.to_string())?.0);
     let slide = placement.slide;
     let mut reveal = show;

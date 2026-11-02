@@ -9,3 +9,6 @@ pub use appearance::*;
 mod shell;
 #[cfg(windows)]
 pub use shell::*;
+
+#[cfg(windows)]
+mod material;

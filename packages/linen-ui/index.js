@@ -62,10 +62,13 @@ export function fitPanel(root, invoke) {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   let current = 0, target = 0, from = 0, started = 0, limit = Infinity, reserved = 0, pending = null;
   async function resize() {
+    let suspended = false;
     while (true) {
-      if (target > reserved) {
-        const reservation = target;
+      if (target > reserved || (current !== target && !suspended)) {
+        const reservation = Math.max(current || from, target);
         const layout = await invoke('resize_flyout', {height:current || from, reserve:reservation});
+        panel.dataset.backdrop = String(layout.backdrop === true);
+        suspended = true;
         limit = Math.floor(layout.limit);
         reserved = Math.min(reservation, limit);
         panel.style.maxHeight = limit + 'px';
@@ -77,6 +80,7 @@ export function fitPanel(root, invoke) {
       const height = Math.ceil(from + (target - from) * (1 - (1 - progress) ** 3));
       panel.style.height = height + 'px';
       const layout = await invoke('resize_flyout', {height});
+      panel.dataset.backdrop = String(layout.backdrop === true);
       current = height;
       limit = Math.floor(layout.limit);
       if (target > limit) {from = Math.min(current, limit); target = limit; started = performance.now();}
@@ -87,14 +91,16 @@ export function fitPanel(root, invoke) {
           await new Promise(requestAnimationFrame);
         }
         if (current !== target) continue;
-        await invoke('resize_flyout', {height:current, settled:true});
+        const settled = await invoke('resize_flyout', {height:current, settled:true});
+        suspended = false;
+        panel.dataset.backdrop = String(settled.backdrop === true);
         reserved = current;
         if (current === target) return;
       }
       if (document.body.classList.contains('presented')) await new Promise(requestAnimationFrame);
     }
   }
-  function fit() {
+  function fit(refresh = false) {
     const max = panel.style.maxHeight;
     panel.style.maxHeight = 'none';
     const previousHeight = panel.style.height;
@@ -109,7 +115,7 @@ export function fitPanel(root, invoke) {
       target = height;
       started = performance.now();
     }
-    if (!pending && current !== target) pending = resize().finally(() => {pending = null;});
+    if (!pending && (refresh === true || current !== target)) pending = resize().finally(() => {pending = null;});
     return pending || Promise.resolve();
   }
   const observer = new ResizeObserver(() => requestAnimationFrame(fit));

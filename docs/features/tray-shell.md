@@ -5,7 +5,15 @@ Consumers provide artwork, app identity, a pause callback and translated status;
 their workers retain hardware and settings ownership. Login startup is external.
 
 Every opening uses the tray icon to select its monitor, then docks a clamped
-360-DIP flyout eight DIP inside that monitor's work-area bottom-right corner.
+360-DIP flyout twelve DIP inside that monitor's work-area bottom-right corner.
+The visible outer stroke, rather than the transparent host or blurred shadow, defines
+the twelve-DIP gap. This follows Windows Quick Settings: the RootGrid margin in
+ControlCenterPage is twelve DIP at the right and bottom. The renderer adds one
+DIP to its inset because its outline is drawn outside the panel box. The current
+taskbar rectangle corrects its edge of the reported
+work area when shell updates lag a resize. Consumers refresh unchanged open panels
+on their existing one-second UI tick; changes to monitor, DPI or work area resolve
+a new host destination, and every reopening reads geometry again.
 Regular and overflow icons, taskbar edges and RTL use the same anchor and enter
 horizontally from the right. Exit reverses entry.
 
@@ -31,7 +39,7 @@ races. Opening and closing are serialized; initialization focus events cannot
 dismiss a window before presentation. WebView2 creation yields synchronous shell
 callbacks. Presentation waits for fonts and renderer frames. The window and WebView2 start
 with transparent native backgrounds and the system app theme, avoiding a default
-white frame before content paints. The renderer follows live appearance updates. The accessible flyout begins with its status card, without
+white frame before content paints. The renderer follows live appearance updates. A Windows host backdrop brush is clipped to the current rounded card behind the webview, leaving the shadow canvas transparent. Shared neutral tints follow the calendar surface: light gray in light mode and charcoal in dark mode. Before a geometry or height transition, the renderer waits for the native brush to be hidden and its composition commit acknowledged. Content then animates against the opaque fallback; two settled renderer frames precede restoring the clipped brush. The existing geometry tick checks Windows advanced effects and high contrast. Disabled effects, unsupported composition or a failed brush use opaque theme fallback colors; forced colors use the system canvas. Browser material screenshots simulate a background and do not establish native blur quality. The accessible flyout begins with its status card, without
 an app-name heading. The first layout completes without CSS transitions. Consumers add the body class
 `presented` after `present_flyout` resolves to enable later UI transitions.
 The renderer prepares at the invisible destination before native motion places

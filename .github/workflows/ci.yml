@@ -20,12 +20,27 @@ jobs:
       manifest: Cargo.toml
       frontend: true
       build-command: vp run build
+  material:
+    runs-on: windows-11-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2.9.3
+      - run: cargo build --locked --example material_probe
+      - run: pwsh -NoProfile -File .github/scripts/test-material.ps1
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: native-material
+          path: material-probe-results/
   test:
-    needs: verify
+    needs: [verify, material]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - run: test '${{ needs.verify.result }}' = success
+      - run: test '${{ needs.material.result }}' = success
   policy-check:
     uses: ./.github/workflows/project-policy.yml
   policy:

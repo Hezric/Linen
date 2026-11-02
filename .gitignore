@@ -4,3 +4,4 @@ dist/
 .agent-state/
 .local-state/
 *.log
+material-probe-results/
