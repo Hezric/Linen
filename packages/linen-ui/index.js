@@ -85,6 +85,7 @@ export function fitPanel(root, invoke) {
           panel.dataset.backdrop = String(layout.backdrop === true);
           limit = Math.floor(layout.limit);
           reserved = Math.min(reservation, limit);
+          brush = requested = Math.min(current || from, limit);
           panel.style.maxHeight = limit + 'px';
           if (target > limit) {from = Math.min(current || from, limit); target = limit; started = performance.now();}
           continue;
