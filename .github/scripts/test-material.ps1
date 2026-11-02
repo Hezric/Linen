@@ -68,6 +68,29 @@ function Background-Contrast($bitmap, $scale) {
     }
     ($left - $right) / $count
 }
+$personalize = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize'
+$transparencyBefore = (Get-ItemProperty -LiteralPath $personalize -Name EnableTransparency -ErrorAction SilentlyContinue).EnableTransparency
+Add-Type -Path (Join-Path $PSScriptRoot 'dwm-reference.cs')
+try {
+    New-Item -Path $personalize -Force | Out-Null
+    Set-ItemProperty -LiteralPath $personalize -Name EnableTransparency -Type DWord -Value 1
+    [DwmReference]::Start()
+    $meta = @{x = 100; y = 50; width = 405; height = 620; scale = 1}
+    $control = Capture-Screen $meta (Join-Path $root 'reference-control.png')
+    $backdropType = [DwmReference]::SetBackdrop(3)
+    $backdrop = Capture-Screen $meta (Join-Path $root 'reference-backdrop.png')
+    try {
+        $controlRoughness = Roughness $control 1
+        $backdropRoughness = Roughness $backdrop 1
+        $controlContrast = Background-Contrast $control 1
+        $backdropContrast = Background-Contrast $backdrop 1
+        @{ transparencyBefore = $transparencyBefore; transparencyConfigured = 1; backdropTypeReadback = $backdropType; controlRoughness = $controlRoughness; backdropRoughness = $backdropRoughness; controlContrast = $controlContrast; backdropContrast = $backdropContrast; materialVisible = ($controlRoughness -ge 1 -and $backdropRoughness -lt $controlRoughness * 0.5 -and $controlContrast -gt 10 -and $backdropContrast -gt $controlContrast * 0.25) } | ConvertTo-Json | Tee-Object -FilePath (Join-Path $root 'reference-results.json')
+    } finally { $control.Dispose(); $backdrop.Dispose() }
+} finally {
+    [DwmReference]::Close()
+    if ($null -ne $transparencyBefore) { Set-ItemProperty -LiteralPath $personalize -Name EnableTransparency -Value $transparencyBefore }
+    else { Remove-ItemProperty -LiteralPath $personalize -Name EnableTransparency -ErrorAction SilentlyContinue }
+}
 foreach ($theme in 'light', 'dark') {
     $shots = @{}
     $metadata = @{}
