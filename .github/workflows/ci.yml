@@ -29,6 +29,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2.9.3
       - run: cargo build --locked --example material_probe
       - run: pwsh -NoProfile -File .github/scripts/test-material.ps1
+      - run: cargo build --locked --example runtime_probe
+      - run: pwsh -NoProfile -File .github/scripts/test-runtime.ps1
       - uses: actions/upload-artifact@v7
         if: always()
         with:

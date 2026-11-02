@@ -208,7 +208,11 @@ async fn record_frame(
 }
 
 #[tauri::command]
-fn finish(app: AppHandle, error: Option<String>) {
+fn finish(app: AppHandle, error: Option<String>, pacing: Option<String>) {
+    if let Some(pacing) = pacing {
+        let marker = std::path::PathBuf::from(std::env::args().nth(1).unwrap());
+        std::fs::write(marker.with_extension("pacing.json"), pacing).unwrap();
+    }
     if let Some(error) = error {
         eprintln!("Material probe: {error}");
         app.exit(1);

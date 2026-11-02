@@ -4,6 +4,17 @@
 Consumers provide artwork, app identity, a pause callback and translated status;
 their workers retain hardware and settings ownership. Login startup is external.
 
+Scoop consumers call `relaunch_from_runtime` before starting their worker or Tauri.
+When the installation has a `runtime` directory, this launches the same executable
+from its canonical physical path with the original arguments and exits the entry
+process. The bucket persists that directory and replaces its executable on update;
+existing `current` login commands remain valid. Explorer therefore sees a stable
+unsigned executable path across updates. Portable archives have no runtime directory
+and run directly. A launch failure exits instead of starting a second tray identity.
+Stop the application before updating. Moving an existing versioned installation to
+this stable path creates a new identity once; the user may need to place its icon
+once more. The application never edits Windows tray preferences.
+
 Every opening uses the tray icon to select its monitor, then docks a clamped
 360-DIP flyout twelve DIP inside that monitor's work-area bottom-right corner.
 The visible outer stroke, rather than the transparent host or blurred shadow, defines
@@ -39,7 +50,7 @@ races. Opening and closing are serialized; initialization focus events cannot
 dismiss a window before presentation. WebView2 creation yields synchronous shell
 callbacks. Presentation waits for fonts and renderer frames. The window and WebView2 start
 with transparent native backgrounds and the system app theme, avoiding a default
-white frame before content paints. The renderer follows live appearance updates. A Windows host backdrop brush is clipped to the current rounded card behind the webview, leaving the shadow canvas transparent. Shared neutral tints follow the calendar surface: light gray in light mode and charcoal in dark mode. The native brush remains visible throughout content changes and entry/exit motion. During the 200-ms height transition, growth waits for two presented renderer frames of the larger card before extending its brush; shrink waits for the smaller native clip composition commit before reducing the card. Thus the brush stays inside the visible rounded card without replacing material with an opaque surface. Two settled renderer frames precede tightening the shadow/input envelope. Every native resize response acknowledges its composition commit; a newly requested height joins the same pending resize loop. The existing geometry tick checks Windows advanced effects and high contrast. Disabled effects, unsupported composition or a failed brush use opaque theme fallback colors; forced colors use the system canvas. Browser material screenshots simulate a background and do not establish native blur quality. The accessible flyout begins with its status card, without
+white frame before content paints. The renderer follows live appearance updates. A Windows host backdrop brush is clipped to the current rounded card behind the webview, leaving the shadow canvas transparent. Shared neutral tints follow the calendar surface: light gray in light mode and charcoal in dark mode. The native brush remains visible throughout content changes and entry/exit motion. During the 200-ms height transition, the renderer updates height on every display frame independently of native commit latency. Growth keeps the brush behind two presented card frames; shrink commits a 64-ms lead and lets the renderer approach it smoothly. The card clamps to the committed or pending larger brush during slow commits and rapid reversals, preserving containment. Thus the brush stays inside the visible rounded card without replacing material with an opaque surface. Two settled renderer frames precede tightening the shadow/input envelope. Every native resize response acknowledges its composition commit; a newly requested height joins the same pending resize loop. The existing geometry tick checks Windows advanced effects and high contrast. Disabled effects, unsupported composition or a failed brush use opaque theme fallback colors; forced colors use the system canvas. Browser material screenshots simulate a background and do not establish native blur quality. The accessible flyout begins with its status card, without
 an app-name heading. The first layout completes without CSS transitions. Consumers add the body class
 `presented` after `present_flyout` resolves to enable later UI transitions.
 The renderer prepares at the invisible destination before native motion places

@@ -61,48 +61,108 @@ export function fitPanel(root, invoke) {
   const views = root.querySelector('#views');
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   let current = 0, target = 0, from = 0, started = 0, limit = Infinity, reserved = 0, pending = null;
+  const frame = () => new Promise(requestAnimationFrame);
+  const heightAt = time => {
+    const progress = Math.min(1, Math.max(0, (time - started) / 200));
+    return Math.ceil(from + (target - from) * (1 - (1 - progress) ** 3));
+  };
   async function resize() {
-    while (true) {
-      if (target > reserved) {
-        const reservation = Math.max(current || from, target);
-        const layout = await invoke('resize_flyout', {height:current || from, reserve:reservation});
-        panel.dataset.backdrop = String(layout.backdrop === true);
-        limit = Math.floor(layout.limit);
-        reserved = Math.min(reservation, limit);
-        panel.style.maxHeight = limit + 'px';
-        if (target > limit) {from = Math.min(current || from, limit); target = limit; started = performance.now();}
-        continue;
-      }
-      const progress = document.body.classList.contains('presented') && !reduced.matches
-        ? Math.min(1, (performance.now() - started) / 200) : 1;
-      const height = Math.ceil(from + (target - from) * (1 - (1 - progress) ** 3));
-      // Grow the card before its brush; shrink the committed brush before its card.
-      if (height >= current) {
-        panel.style.height = height + 'px';
-        if (height > current && document.body.classList.contains('presented')) {
-          await new Promise(requestAnimationFrame);
-          await new Promise(requestAnimationFrame);
+    let brush = current, requested = current, rendering = false, animation;
+    let painted = [current, current];
+    const animated = () => document.body.classList.contains('presented') && !reduced.matches;
+    function paint(time) {
+      painted = [painted[1], current];
+      // A pending larger brush must remain inside the card even after a reversal.
+      current = Math.min(reserved, Math.max(animated() ? heightAt(time) : target, brush, requested));
+      panel.style.height = current + 'px';
+      animation = requestAnimationFrame(paint);
+    }
+    try {
+      while (true) {
+        if (target > reserved) {
+          const reservation = Math.max(current || from, target);
+          const height = brush || from;
+          requested = height;
+          const layout = await invoke('resize_flyout', {height, reserve:reservation});
+          panel.dataset.backdrop = String(layout.backdrop === true);
+          limit = Math.floor(layout.limit);
+          reserved = Math.min(reservation, limit);
+          brush = requested = Math.min(height, limit);
+          panel.style.maxHeight = limit + 'px';
+          if (target > limit) {from = Math.min(current || from, limit); target = limit; started = performance.now();}
+          continue;
         }
-      }
-      const layout = await invoke('resize_flyout', {height});
-      panel.style.height = height + 'px';
-      panel.dataset.backdrop = String(layout.backdrop === true);
-      current = height;
-      limit = Math.floor(layout.limit);
-      if (target > limit) {from = Math.min(current, limit); target = limit; started = performance.now();}
-      panel.style.maxHeight = `${limit}px`;
-      if (current === target) {
-        if (document.body.classList.contains('presented')) {
-          await new Promise(requestAnimationFrame);
-          await new Promise(requestAnimationFrame);
+        if (animated()) {
+          if (!rendering) {
+            // Give shrink its first committed clip before starting the renderer clock.
+            if (target < current) {
+              const height = heightAt(started + 64);
+              const layout = await invoke('resize_flyout', {height});
+              brush = requested = height;
+              panel.dataset.backdrop = String(layout.backdrop === true);
+            }
+            started = performance.now();
+            painted = [current, current];
+            rendering = true;
+            animation = requestAnimationFrame(paint);
+          }
+          // Growth trails presented DOM frames; shrink reserves a committed lead.
+          const height = target < current
+            ? Math.min(current, heightAt(performance.now() + 64))
+            : Math.min(target, current, ...painted);
+          if (height !== brush) {
+            requested = height;
+            const layout = await invoke('resize_flyout', {height});
+            brush = height;
+            panel.dataset.backdrop = String(layout.backdrop === true);
+            limit = Math.floor(layout.limit);
+            if (target > limit) {from = Math.min(current, limit); target = limit; started = performance.now();}
+            panel.style.maxHeight = limit + 'px';
+          }
+          if (current !== target || brush !== target) {await frame(); continue;}
+        } else {
+          const height = target;
+          // Grow the card before its brush; shrink the committed brush before its card.
+          if (height >= current) {
+            panel.style.height = height + 'px';
+            if (height > current && document.body.classList.contains('presented')) {
+              await new Promise(requestAnimationFrame);
+              await new Promise(requestAnimationFrame);
+            }
+          }
+          const layout = await invoke('resize_flyout', {height});
+          panel.style.height = height + 'px';
+          panel.dataset.backdrop = String(layout.backdrop === true);
+          current = height;
+          brush = requested = height;
+          limit = Math.floor(layout.limit);
+          if (target > limit) {from = Math.min(current, limit); target = limit; started = performance.now();}
+          panel.style.maxHeight = `${limit}px`;
         }
-        if (current !== target) continue;
-        const settled = await invoke('resize_flyout', {height:current, settled:true});
-        panel.dataset.backdrop = String(settled.backdrop === true);
-        reserved = current;
-        if (current === target) return;
+        if (current === target) {
+          if (document.body.classList.contains('presented')) {
+            await new Promise(requestAnimationFrame);
+            await new Promise(requestAnimationFrame);
+          }
+          if (current !== target) continue;
+          const height = current;
+          const settled = await invoke('resize_flyout', {height, settled:true});
+          panel.dataset.backdrop = String(settled.backdrop === true);
+          const nextLimit = Math.floor(settled.limit);
+          brush = requested = reserved = Math.min(height, nextLimit);
+          if (limit !== nextLimit) {
+            limit = nextLimit;
+            current = Math.min(current, limit);
+            panel.style.height = current + 'px';
+            panel.style.maxHeight = limit + 'px';
+            fit();
+          }
+          if (current === target) return;
+        }
+        if (document.body.classList.contains('presented')) await frame();
       }
-      if (document.body.classList.contains('presented')) await new Promise(requestAnimationFrame);
+    } finally {
+      if (rendering) cancelAnimationFrame(animation);
     }
   }
   function fit(refresh = false) {

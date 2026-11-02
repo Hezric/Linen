@@ -1,5 +1,6 @@
 addEventListener('DOMContentLoaded', async () => {
   const invoke = window.__TAURI_INTERNALS__.invoke;
+  const pacing = [];
   try {
     const style = document.createElement('style');
     style.textContent = window.probeStyle;
@@ -24,11 +25,13 @@ addEventListener('DOMContentLoaded', async () => {
       await invoke('record_frame', { stage, panel: [r.left, r.top, r.right, r.bottom] });
     };
     const { fitPanel } = await import(URL.createObjectURL(new Blob([window.probeSource], { type: 'text/javascript' })));
-    let phase = '', frame = 0;
+    let phase = '', frame = 0, calls = null;
     const fit = fitPanel(document, async (command, args) => {
       // Observe the DOM frame before its matching native clip update can arrive.
       if (phase && args.reserve === undefined && !args.settled) await record(`${phase}-frame-${frame++}`, false);
+      const start = performance.now();
       const layout = await invoke(command, args);
+      calls?.push({start, end:performance.now(), ...args});
       if (window.probeMode === 'material' && args.settled && !layout.backdrop) throw Error('Native material unavailable');
       return layout;
     });
@@ -43,8 +46,33 @@ addEventListener('DOMContentLoaded', async () => {
       phase = '';
       await record(`${name}-settled`);
     }
-    await invoke('finish');
+    // Sample without the screenshot/API acknowledgement that pauses the earlier checks.
+    for (const [name, height] of [['shrink', 158], ['grow', 278]]) {
+      const samples = [];
+      let sampling = true;
+      const sample = time => {
+        samples.push({time, height:panel.getBoundingClientRect().height});
+        if (sampling) requestAnimationFrame(sample);
+      };
+      calls = [];
+      requestAnimationFrame(sample);
+      content.style.height = `${height}px`;
+      const start = performance.now();
+      await fit();
+      sampling = false;
+      await frames();
+      const changes = samples.filter((value, index) => !index || value.height !== samples[index-1].height);
+      const intervals = samples.slice(1).map((value,index)=>value.time-samples[index].time).sort((a,b)=>a-b);
+      const refresh = intervals[Math.floor(intervals.length/2)];
+      const moving = changes.slice(1).filter(value=>Math.abs(value.height-panel.getBoundingClientRect().height)>3);
+      const maxChangeGap = Math.max(...moving.slice(1).map((value,index)=>value.time-moving[index].time));
+      pacing.push({name, duration:performance.now()-start, startDelay:changes[1]?.time-start, refresh, maxChangeGap, samples, calls, changes});
+      calls = null;
+      if (changes.length < 8 || maxChangeGap > refresh * 2.5)
+        throw Error(`${name} height animation stalled: ${changes.length} changes, gap ${maxChangeGap}ms, refresh ${refresh}ms`);
+    }
+    await invoke('finish', {pacing:JSON.stringify(pacing)});
   } catch (error) {
-    await invoke('finish', { error: String(error.stack || error) });
+    await invoke('finish', { error: String(error.stack || error), pacing:JSON.stringify(pacing) });
   }
 });
