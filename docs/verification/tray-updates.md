@@ -16,7 +16,9 @@ New-Item -ItemType Directory -Path $work -ErrorAction Stop | Out-Null
 ./scripts/read-tray-state.ps1 -OutFile (Join-Path $work 'before.json')
 ```
 
-In `Entries`, select each installed application's fixed `persist/runtime` path.
+`Icons` includes all normal notification-area buttons. Identify a consumer using
+its translated status and before/after position; status-only labels have no stable
+application-name prefix. In `Entries`, select each application's fixed `persist/runtime` path.
 Record its `PSChildName`, `ExecutablePath`, and `IsPromoted`. In `Icons`, confirm
 that a previously exposed icon is a `SystemTray.NormalButton`, has
 `Offscreen=false`, and has nonempty bounds inside `Taskbar`. Preserve an
