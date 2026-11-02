@@ -82,3 +82,6 @@ input uses the error color. Other controls retain the shared keyboard focus ring
 UI checks exercise the shared accessible markup; consuming apps retain their
 behavior tests. Native placement, transparency, input regions, outside clicks, overflow
 light-dismissal and visual motion also require direct Windows inspection.
+
+For background checks of tooltip labels and placement across a Scoop update,
+read [tray update verification](../verification/tray-updates.md) first.
