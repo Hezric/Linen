@@ -2,12 +2,11 @@ use std::cell::RefCell;
 use windows::{
     System::{DispatcherQueue, DispatcherQueueController},
     UI::{
-        Accessibility::AccessibilitySettings,
         Composition::{
             CompositionRoundedRectangleGeometry, Compositor, Desktop::DesktopWindowTarget,
             SpriteVisual,
         },
-        ViewManagement::UISettings,
+        ViewManagement::{AccessibilitySettings, UISettings},
     },
     Win32::{
         Foundation::HWND,
