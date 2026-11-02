@@ -36,12 +36,20 @@ jobs:
         with:
           name: native-material
           path: material-probe-results/
+  build-cache:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: dtolnay/rust-toolchain@stable
+      - run: pwsh -NoProfile -File scripts/test-build-cache.ps1
   test:
-    needs: [verify, material]
+    needs: [verify, material, build-cache]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - run: test '${{ needs.verify.result }}' = success
+      - run: test '${{ needs.build-cache.result }}' = success
       - run: test '${{ needs.material.result }}' = success
   policy-check:
     uses: ./.github/workflows/project-policy.yml
