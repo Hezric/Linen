@@ -7,10 +7,13 @@ type Rect = [i32; 4];
 use tauri::{AppHandle, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use windows::Win32::{
     Foundation::{COLORREF, HWND},
-    Graphics::{Dwm::DwmFlush, Gdi::{CreateRectRgn, SetWindowRgn}},
+    Graphics::{
+        Dwm::DwmFlush,
+        Gdi::{CreateRectRgn, SetWindowRgn},
+    },
     UI::WindowsAndMessaging::{
-        GWL_EXSTYLE, GetWindowLongPtrW, LWA_ALPHA, SetLayeredWindowAttributes,
-        SetWindowLongPtrW, WS_EX_LAYERED,
+        GWL_EXSTYLE, GetWindowLongPtrW, LWA_ALPHA, SetLayeredWindowAttributes, SetWindowLongPtrW,
+        WS_EX_LAYERED,
     },
 };
 
@@ -25,14 +28,20 @@ async fn ready(app: AppHandle, window: WebviewWindow) -> Result<(), String> {
             let scale = host.scale_factor().map_err(|e| e.to_string())?;
             let size = host.inner_size().map_err(|e| e.to_string())?;
             let px = |dip: f64| (dip * scale).round() as i32;
-            let panel = [px(32.0), size.height as i32 - px(313.0), size.width as i32 - px(13.0), size.height as i32 - px(13.0)];
+            let panel = [
+                px(32.0),
+                size.height as i32 - px(313.0),
+                size.width as i32 - px(13.0),
+                size.height as i32 - px(13.0),
+            ];
             let mode = std::env::args().nth(3).unwrap();
             let active = mode == "material" && material::update(hwnd, panel, scale, true);
             host.show().map_err(|e| e.to_string())?;
             unsafe {
                 let style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
                 SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style | WS_EX_LAYERED.0 as isize);
-                SetLayeredWindowAttributes(hwnd, COLORREF(0), 255, LWA_ALPHA).map_err(|e| e.to_string())?;
+                SetLayeredWindowAttributes(hwnd, COLORREF(0), 255, LWA_ALPHA)
+                    .map_err(|e| e.to_string())?;
                 let region = CreateRectRgn(0, px(270.0), size.width as i32, size.height as i32);
                 if SetWindowRgn(hwnd, Some(region), true) == 0 {
                     return Err("CI host region failed".into());
@@ -55,7 +64,9 @@ fn painted(window: WebviewWindow, active: bool) -> Result<(), String> {
     let position = window.inner_position().map_err(|e| e.to_string())?;
     let size = window.inner_size().map_err(|e| e.to_string())?;
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
-    unsafe { DwmFlush().map_err(|e| e.to_string())?; }
+    unsafe {
+        DwmFlush().map_err(|e| e.to_string())?;
+    }
     std::fs::write(std::env::args().nth(1).unwrap(), format!(
         "{{\"active\":{active},\"x\":{},\"y\":{},\"width\":{},\"height\":{},\"scale\":{scale}}}",
         position.x, position.y, size.width, size.height

@@ -29,8 +29,8 @@ foreach ($theme in 'light', 'dark') {
                 $bitmap.Save((Join-Path $root "$theme-$mode.png"))
                 $shots[$mode] = $bitmap
             } finally {
-                if (!$process.HasExited) { Stop-Process -Id $process.Id -Force }
-                $process.WaitForExit(5000) | Out-Null
+                if (!$process.HasExited) { taskkill.exe /PID $process.Id /T /F | Out-Null }
+                if (!$process.WaitForExit(5000)) { throw "Owned CI process tree did not exit: $($process.Id)" }
                 $process.Dispose()
             }
         }
