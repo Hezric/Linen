@@ -25,10 +25,10 @@ try {
                     $records += $meta
                     if ($meta.stage -in @('initial','shrink-frame-2','grow-frame-2','shrink-settled','grow-settled')) {
                         Add-Type -AssemblyName System.Drawing
-                        $image = [Drawing.Bitmap]::new($meta.width, $meta.height)
+                        $image = [Drawing.Bitmap]::new([int]$meta.width, [int]$meta.height)
                         $graphics = [Drawing.Graphics]::FromImage($image)
                         try {
-                            $graphics.CopyFromScreen($meta.x, $meta.y, 0, 0, $image.Size)
+                            $graphics.CopyFromScreen([int]$meta.x, [int]$meta.y, 0, 0, $image.Size)
                             $image.Save((Join-Path $root "$theme-$mode-$($meta.stage).png"))
                         } finally {
                             $graphics.Dispose()

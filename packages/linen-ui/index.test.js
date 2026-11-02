@@ -72,6 +72,40 @@ test('window fitting converges under a fractional work-area limit',async t=>{
   assert.ok(heights.at(-1)<=800);
 });
 
+test('animated reversals keep every native brush inside the visible card', async t=>{
+  const root=panelEnvironment(t,180), panel=root.querySelector('.flyout');
+  globalThis.matchMedia=()=>({matches:false});
+  globalThis.requestAnimationFrame=callback=>setTimeout(()=>callback(performance.now()),8);
+  globalThis.cancelAnimationFrame=clearTimeout;
+  let brush=0, presented=false;
+  const style=panel.style;
+  panel.style=new Proxy(style,{set(object,key,value){
+    if(presented && key==='height' && value!=='auto')
+      assert.ok(parseFloat(value)>=brush,`card ${value} must contain brush ${brush}`);
+    object[key]=value; return true;
+  }});
+  const fit=fitPanel(root,async(_,args)=>{
+    if(presented) assert.ok(parseFloat(panel.style.height)>=args.height,'native growth needs an already larger card');
+    brush=args.height;
+    await new Promise(resolve=>setTimeout(resolve,12));
+    return {limit:800,backdrop:true};
+  });
+  await fit();
+  presented=true;
+  globalThis.document.body.classList.contains=()=>true;
+  panel.scrollHeight=350;
+  const pending=fit();
+  for(const height of [220,320,180]) {
+    await new Promise(resolve=>setTimeout(resolve,45));
+    panel.scrollHeight=height;
+    assert.equal(fit(),pending);
+  }
+  await pending;
+  assert.equal(panel.style.height,'180px');
+  assert.equal(brush,180);
+  assert.equal(panel.dataset.backdrop,'true');
+});
+
 test('a later fit can recover after one rejected native resize',async t=>{
   const root=panelEnvironment(t,300);
   let attempts=0, applied;
