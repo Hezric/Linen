@@ -21,7 +21,7 @@ jobs:
       frontend: true
       build-command: vp run build
   material:
-    runs-on: windows-latest
+    runs-on: windows-11-arm
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7.0.1

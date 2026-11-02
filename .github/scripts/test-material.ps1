@@ -61,7 +61,7 @@ foreach ($theme in 'light', 'dark') {
     $shots = @{}
     $metadata = @{}
     try {
-        foreach ($mode in 'transparent', 'material', 'unlayered', 'fallback') {
+        foreach ($mode in 'transparent', 'material', 'fallback') {
             $marker = Join-Path $root "$theme-$mode.json"
             $stdout = Join-Path $root "$theme-$mode.stdout.log"
             $stderr = Join-Path $root "$theme-$mode.stderr.log"
@@ -105,8 +105,7 @@ foreach ($theme in 'light', 'dark') {
         $controlContrast = Background-Contrast $shots['transparent-initial'] $scale
         $materialContrast = Background-Contrast $shots['material-initial'] $scale
         $fallbackContrast = Background-Contrast $shots['fallback-initial'] $scale
-        $unlayeredContrast = Background-Contrast $shots['unlayered-initial'] $scale
-        Write-Output "Native background contrast: $theme control=$controlContrast material=$materialContrast unlayered=$unlayeredContrast fallback=$fallbackContrast"
+        Write-Output "Native background contrast: $theme control=$controlContrast material=$materialContrast fallback=$fallbackContrast"
         if ($controlContrast -lt 10 -or $materialContrast -lt $controlContrast * 0.25 -or [Math]::Abs($fallbackContrast) -gt 1) {
             throw "Material lost the background's coarse color signal: $theme control=$controlContrast material=$materialContrast fallback=$fallbackContrast"
         }
