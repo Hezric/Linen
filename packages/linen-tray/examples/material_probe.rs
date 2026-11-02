@@ -1,18 +1,62 @@
-#[path = "../src/material.rs"]
-mod material;
+mod material {
+    include!("../src/material.rs");
+
+    pub(super) fn inspect(hwnd: HWND, dom: [f64; 4], scale: f64) -> String {
+        use windows::UI::Composition::{CompositionBackdropBrush, CompositionGeometricClip};
+        use windows::Win32::System::WinRT::Composition::IDesktopWindowTargetInterop;
+
+        SURFACE.with(|slot| {
+            let slot = slot.borrow();
+            let Some((owner, Ok(surface))) = slot.as_ref() else {
+                return "null".into();
+            };
+            assert_eq!(*owner, hwnd.0 as isize);
+            let target = surface._target.cast::<IDesktopWindowTargetInterop>().unwrap();
+            assert_eq!(unsafe { target.Hwnd().unwrap() }, hwnd);
+            let root = surface._target.Root().unwrap().cast::<SpriteVisual>().unwrap();
+            assert_eq!(root, surface.visual);
+            assert!(root.Brush().unwrap().cast::<CompositionBackdropBrush>().is_ok());
+            let clip = root.Clip().unwrap().cast::<CompositionGeometricClip>().unwrap();
+            let shape = clip
+                .Geometry()
+                .unwrap()
+                .cast::<CompositionRoundedRectangleGeometry>()
+                .unwrap();
+            assert_eq!(shape, surface.shape);
+            let size = root.Size().unwrap();
+            let clip_size = shape.Size().unwrap();
+            assert_eq!([clip_size.X, clip_size.Y], [size.X, size.Y]);
+            let radius = shape.CornerRadius().unwrap();
+            assert_eq!([radius.X, radius.Y], [(8.0 * scale) as f32; 2]);
+            let offset = root.Offset().unwrap();
+            let visible = root.IsVisible().unwrap();
+            let suspended = SUSPENDED.with(Cell::get);
+            assert!(!suspended || !visible);
+            let bounds = [offset.X, offset.Y, offset.X + size.X, offset.Y + size.Y];
+            if visible {
+                for (actual, expected) in bounds.into_iter().zip(dom) {
+                    assert!((actual as f64 - expected * scale).abs() <= 1.0);
+                }
+            }
+            format!(
+                "{{\"visible\":{visible},\"suspended\":{suspended},\"bounds\":{bounds:?},\"clipSize\":[{},{}],\"radius\":[{},{}]}}",
+                clip_size.X, clip_size.Y, radius.X, radius.Y
+            )
+        })
+    }
+}
 type Rect = [i32; 4];
 
 use tauri::{AppHandle, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use windows::Win32::{
     Foundation::{COLORREF, HWND},
     Graphics::{
-        Dwm::{DWMWA_CLOAKED, DwmFlush, DwmGetWindowAttribute},
+        Dwm::{DWMWA_CLOAKED, DwmGetWindowAttribute},
         Gdi::{CreateRectRgn, DeleteObject, HGDIOBJ, SetWindowRgn},
     },
     UI::WindowsAndMessaging::{
-        GWL_EXSTYLE, GetWindowLongPtrW, HWND_TOPMOST, IsWindowVisible, LWA_ALPHA, SWP_NOACTIVATE,
-        SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW, SetLayeredWindowAttributes, SetWindowLongPtrW,
-        SetWindowPos, WS_EX_LAYERED,
+        GWL_EXSTYLE, GetWindowLongPtrW, IsWindowVisible, LWA_ALPHA, SetLayeredWindowAttributes,
+        SetWindowLongPtrW, WS_EX_LAYERED,
     },
 };
 
@@ -70,16 +114,6 @@ fn show(window: WebviewWindow) -> Result<(), String> {
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
     let size = window.inner_size().map_err(|e| e.to_string())?;
     unsafe {
-        SetWindowPos(
-            hwnd,
-            Some(HWND_TOPMOST),
-            0,
-            0,
-            0,
-            0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW,
-        )
-        .map_err(|e| e.to_string())?;
         let style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
         SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style | WS_EX_LAYERED.0 as isize);
         SetLayeredWindowAttributes(hwnd, COLORREF(0), 255, LWA_ALPHA).map_err(|e| e.to_string())?;
@@ -101,11 +135,12 @@ fn show(window: WebviewWindow) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn capture(window: WebviewWindow, stage: String, panel: [f64; 4]) -> Result<(), String> {
-    let background = stage == "background";
-    if background {
-        window.hide().map_err(|e| e.to_string())?;
-    }
+async fn record_frame(
+    app: AppHandle,
+    window: WebviewWindow,
+    stage: String,
+    panel: [f64; 4],
+) -> Result<(), String> {
     let position = window.inner_position().map_err(|e| e.to_string())?;
     let size = window.inner_size().map_err(|e| e.to_string())?;
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
@@ -122,31 +157,42 @@ async fn capture(window: WebviewWindow, stage: String, panel: [f64; 4]) -> Resul
         )
         .map_err(|e| e.to_string())?;
     }
-    if !background && !layered {
+    if !layered {
         return Err("Probe lost its layered host style".into());
     }
-    if !background && (!visible || cloaked != 0) {
+    if !visible || cloaked != 0 {
         return Err(format!(
             "Probe is not presented: visible={visible} cloaked={cloaked}"
         ));
     }
+    let (send, mut receive) = tauri::async_runtime::channel(1);
+    let host = window.clone();
+    app.run_on_main_thread(move || {
+        let hwnd = HWND(host.hwnd().unwrap().0);
+        let surface = material::inspect(hwnd, panel, scale);
+        let effects = windows::UI::ViewManagement::UISettings::new()
+            .and_then(|settings| settings.AdvancedEffectsEnabled())
+            .unwrap_or(false);
+        let _ = send.try_send((surface, effects));
+    })
+    .map_err(|e| e.to_string())?;
+    let (surface, effects) = receive.recv().await.ok_or("API inspection was interrupted")?;
+    if std::env::args().nth(3).unwrap() == "material" && surface == "null" {
+        return Err("The real WebView host has no attached backdrop".into());
+    }
     tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
-        if background {
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
-        unsafe { DwmFlush().map_err(|e| e.to_string())? };
         let marker = std::path::PathBuf::from(std::env::args().nth(1).unwrap());
         let pending = marker.with_extension("pending");
         let ack = marker.with_extension("ack");
         std::fs::write(&pending, format!(
-            "{{\"stage\":\"{stage}\",\"layered\":{layered},\"visible\":{visible},\"cloaked\":{cloaked},\"panel\":{panel:?},\"x\":{},\"y\":{},\"width\":{},\"height\":{},\"scale\":{scale}}}",
+            "{{\"stage\":\"{stage}\",\"layered\":{layered},\"visible\":{visible},\"cloaked\":{cloaked},\"advancedEffects\":{effects},\"surface\":{surface},\"panel\":{panel:?},\"x\":{},\"y\":{},\"width\":{},\"height\":{},\"scale\":{scale}}}",
             position.x, position.y, size.width, size.height
         )).map_err(|e| e.to_string())?;
         std::fs::rename(pending, &marker).map_err(|e| e.to_string())?;
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         while !ack.exists() {
             if std::time::Instant::now() > deadline {
-                return Err("CI screenshot acknowledgement timed out".into());
+                return Err("CI frame acknowledgement timed out".into());
             }
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
@@ -154,9 +200,6 @@ async fn capture(window: WebviewWindow, stage: String, panel: [f64; 4]) -> Resul
     })
     .await
     .map_err(|e| e.to_string())??;
-    if background {
-        show(window)?;
-    }
     Ok(())
 }
 
@@ -172,14 +215,8 @@ fn finish(app: AppHandle, error: Option<String>) {
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![resize_flyout, show, capture, finish])
+        .invoke_handler(tauri::generate_handler![resize_flyout, show, record_frame, finish])
         .setup(|app| {
-            WebviewWindowBuilder::new(app, "pattern", WebviewUrl::App("index.html".into()))
-                .title("Linen CI background")
-                .position(0.0, 0.0)
-                .inner_size(900.0, 700.0)
-                .decorations(false)
-                .build()?;
             let script = format!(
                 "window.probeStyle={:?};window.probeSource={:?};window.probeMode={:?};window.probeTheme={:?};{}",
                 include_str!("../../linen-ui/style.css"),
