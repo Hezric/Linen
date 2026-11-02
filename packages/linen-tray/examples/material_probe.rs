@@ -98,6 +98,11 @@ async fn capture(window: WebviewWindow, stage: String, panel: [f64; 4]) -> Resul
     let position = window.inner_position().map_err(|e| e.to_string())?;
     let size = window.inner_size().map_err(|e| e.to_string())?;
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
+    let hwnd = HWND(window.hwnd().map_err(|e| e.to_string())?.0);
+    let layered = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) } & WS_EX_LAYERED.0 as isize != 0;
+    if !background && !layered {
+        return Err("Probe lost its layered host style".into());
+    }
     tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
         if background {
             std::thread::sleep(std::time::Duration::from_millis(100));
@@ -107,7 +112,7 @@ async fn capture(window: WebviewWindow, stage: String, panel: [f64; 4]) -> Resul
         let pending = marker.with_extension("pending");
         let ack = marker.with_extension("ack");
         std::fs::write(&pending, format!(
-            "{{\"stage\":\"{stage}\",\"panel\":{panel:?},\"x\":{},\"y\":{},\"width\":{},\"height\":{},\"scale\":{scale}}}",
+            "{{\"stage\":\"{stage}\",\"layered\":{layered},\"panel\":{panel:?},\"x\":{},\"y\":{},\"width\":{},\"height\":{},\"scale\":{scale}}}",
             position.x, position.y, size.width, size.height
         )).map_err(|e| e.to_string())?;
         std::fs::rename(pending, &marker).map_err(|e| e.to_string())?;
@@ -123,7 +128,7 @@ async fn capture(window: WebviewWindow, stage: String, panel: [f64; 4]) -> Resul
     .await
     .map_err(|e| e.to_string())??;
     if background {
-        window.show().map_err(|e| e.to_string())?;
+        show(window)?;
     }
     Ok(())
 }
