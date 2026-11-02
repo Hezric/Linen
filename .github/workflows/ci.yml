@@ -14,6 +14,14 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  desktop:
+    runs-on: windows-11-arm
+    timeout-minutes: 5
+    steps:
+      - run: |
+          [Diagnostics.Process]::GetCurrentProcess().SessionId
+          whoami.exe
+          query.exe session
   verify:
     uses: ./.github/workflows/windows-checks.yml
     with:

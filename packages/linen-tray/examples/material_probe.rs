@@ -126,7 +126,9 @@ async fn capture(window: WebviewWindow, stage: String, panel: [f64; 4]) -> Resul
         return Err("Probe lost its layered host style".into());
     }
     if !background && (!visible || cloaked != 0) {
-        return Err(format!("Probe is not presented: visible={visible} cloaked={cloaked}"));
+        return Err(format!(
+            "Probe is not presented: visible={visible} cloaked={cloaked}"
+        ));
     }
     tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
         if background {
