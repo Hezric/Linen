@@ -103,34 +103,32 @@ test('shrinking keeps the live material inside the DOM until its smaller clip is
   assert.equal(panel.dataset.backdrop,'true');
 });
 
-test('shrinking waits for native backdrop suspension before changing DOM height', async t=>{
-  const root=panelEnvironment(t,300), panel=root.querySelector('.flyout');
-  const calls=[];
+test('growth reveals the card before extending its live material', async t=>{
+  const root=panelEnvironment(t,180), panel=root.querySelector('.flyout');
+  let growing=false;
   const fit=fitPanel(root,async(_,args)=>{
-    calls.push({args,domHeight:panel.style.height});
-    return {limit:800,backdrop:args.settled===true};
+    if(growing && args.height===300 && !args.settled)
+      assert.equal(panel.style.height,'300px','card growth contains the next native brush');
+    return {limit:800,backdrop:true};
   });
   await fit();
-  calls.length=0;
-  panel.scrollHeight=180;
+  growing=true;
+  panel.scrollHeight=300;
   await fit();
-  assert.equal(calls[0].args.reserve,300,'reserve acknowledges suspension before DOM shrink');
-  assert.equal(calls[0].domHeight,'300px');
-  assert.equal(panel.style.height,'180px');
-  assert.equal(panel.dataset.backdrop,'true','only the settled response restores the material');
+  assert.equal(panel.style.height,'300px');
+  assert.equal(panel.dataset.backdrop,'true');
 });
-test('shrinking during a settled response suspends the restored backdrop again', async t=>{
+
+test('a target changed during settlement stays contained without losing material', async t=>{
   const root=panelEnvironment(t,300), panel=root.querySelector('.flyout');
   const settling=Promise.withResolvers(), resume=Promise.withResolvers(), calls=[];
-  let visible=false, held=false;
+  let held=false;
   const fit=fitPanel(root,async(_,args)=>{
-    calls.push({args,domHeight:panel.style.height,visible});
-    if(args.reserve!==undefined)visible=false;
-    if(args.settled) {
-      if(!held) {held=true;settling.resolve();await resume.promise;}
-      visible=true;
-    }
-    return {limit:800,backdrop:visible};
+    calls.push({args,domHeight:panel.style.height});
+    if(args.settled && !held) {held=true;settling.resolve();await resume.promise;}
+    if(args.height===180 && !args.settled)
+      assert.equal(panel.style.height,'300px','retargeted shrink waits for the smaller clip');
+    return {limit:800,backdrop:true};
   });
   const pending=fit();
   await settling.promise;
@@ -138,11 +136,6 @@ test('shrinking during a settled response suspends the restored backdrop again',
   assert.equal(fit(),pending,'a new target shares the pending resize loop');
   resume.resolve();
   await pending;
-  const restored=calls.findIndex(({args})=>args.settled);
-  assert.equal(calls[restored+1].args.reserve,300,'the restored material must be suspended before shrinking again');
-  assert.equal(calls[restored+1].domHeight,'300px');
-  for(const call of calls.filter(({args})=>args.reserve===undefined&&!args.settled&&args.height<300))
-    assert.equal(call.visible,false,'DOM shrink must not expose the old native outline');
   assert.deepEqual(calls.filter(({args})=>args.settled).map(({args})=>args.height),[300,180]);
   assert.equal(panel.style.height,'180px');
   assert.equal(panel.dataset.backdrop,'true');

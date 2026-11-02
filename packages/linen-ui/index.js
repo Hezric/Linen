@@ -62,13 +62,11 @@ export function fitPanel(root, invoke) {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   let current = 0, target = 0, from = 0, started = 0, limit = Infinity, reserved = 0, pending = null;
   async function resize() {
-    let suspended = false;
     while (true) {
-      if (target > reserved || (current !== target && !suspended)) {
+      if (target > reserved) {
         const reservation = Math.max(current || from, target);
         const layout = await invoke('resize_flyout', {height:current || from, reserve:reservation});
         panel.dataset.backdrop = String(layout.backdrop === true);
-        suspended = true;
         limit = Math.floor(layout.limit);
         reserved = Math.min(reservation, limit);
         panel.style.maxHeight = limit + 'px';
@@ -78,8 +76,10 @@ export function fitPanel(root, invoke) {
       const progress = document.body.classList.contains('presented') && !reduced.matches
         ? Math.min(1, (performance.now() - started) / 200) : 1;
       const height = Math.ceil(from + (target - from) * (1 - (1 - progress) ** 3));
-      panel.style.height = height + 'px';
+      // Grow the card before its brush; shrink the committed brush before its card.
+      if (height >= current) panel.style.height = height + 'px';
       const layout = await invoke('resize_flyout', {height});
+      panel.style.height = height + 'px';
       panel.dataset.backdrop = String(layout.backdrop === true);
       current = height;
       limit = Math.floor(layout.limit);
@@ -92,7 +92,6 @@ export function fitPanel(root, invoke) {
         }
         if (current !== target) continue;
         const settled = await invoke('resize_flyout', {height:current, settled:true});
-        suspended = false;
         panel.dataset.backdrop = String(settled.backdrop === true);
         reserved = current;
         if (current === target) return;

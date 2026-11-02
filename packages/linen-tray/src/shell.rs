@@ -544,9 +544,7 @@ pub async fn resize_flyout(
     let limit = ((geometry.work[3] - geometry.work[1]) as f64 / geometry.scale - 45.0)
         .floor()
         .max(1.0);
-    if geometry_changed || reserve.is_some() {
-        crate::material::suspend(&app).await?;
-    }
+    let commit_app = app.clone();
     let backdrop = tauri::async_runtime::spawn_blocking(move || {
         let mut layout = shared.layout.lock().unwrap();
         let existing = if geometry_changed { None } else { *layout };
@@ -635,10 +633,7 @@ pub async fn resize_flyout(
                 }
                 *region_height = next;
                 *surface_shared.panel.lock().unwrap() = Some(panel);
-                Ok::<_, String>((
-                    placement,
-                    crate::material::update(hwnd, panel, geometry.scale, settled.unwrap_or(false)),
-                ))
+                Ok::<_, String>((placement, crate::material::update(hwnd, panel, geometry.scale)))
             })();
             let _ = send.send(result);
         })
@@ -650,6 +645,7 @@ pub async fn resize_flyout(
     })
     .await
     .map_err(|e| e.to_string())??;
+    crate::material::commit(&commit_app).await?;
     Ok(FlyoutLayout { limit, backdrop })
 }
 
