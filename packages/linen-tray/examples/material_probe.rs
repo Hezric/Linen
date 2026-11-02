@@ -1,7 +1,7 @@
 mod material {
     include!("../src/material.rs");
 
-    pub(super) fn inspect(hwnd: HWND, dom: [f64; 4], scale: f64) -> String {
+    pub(super) fn inspect(hwnd: HWND, dom: [f64; 4], scale: f64, expected_visible: bool) -> String {
         use windows::UI::Composition::{CompositionBackdropBrush, CompositionGeometricClip};
         use windows::Win32::System::WinRT::Composition::IDesktopWindowTargetInterop;
 
@@ -31,7 +31,8 @@ mod material {
             let offset = root.Offset().unwrap();
             let visible = root.IsVisible().unwrap();
             let suspended = SUSPENDED.with(Cell::get);
-            assert!(!suspended || !visible);
+            assert_eq!(visible, expected_visible);
+            assert_eq!(suspended, !expected_visible);
             let bounds = [offset.X, offset.Y, offset.X + size.X, offset.Y + size.Y];
             if visible {
                 for (actual, expected) in bounds.into_iter().zip(dom) {
@@ -167,16 +168,20 @@ async fn record_frame(
     }
     let (send, mut receive) = tauri::async_runtime::channel(1);
     let host = window.clone();
+    let expected_visible = stage == "initial" || stage.ends_with("-settled");
     app.run_on_main_thread(move || {
         let hwnd = HWND(host.hwnd().unwrap().0);
-        let surface = material::inspect(hwnd, panel, scale);
+        let surface = material::inspect(hwnd, panel, scale, expected_visible);
         let effects = windows::UI::ViewManagement::UISettings::new()
             .and_then(|settings| settings.AdvancedEffectsEnabled())
             .unwrap_or(false);
         let _ = send.try_send((surface, effects));
     })
     .map_err(|e| e.to_string())?;
-    let (surface, effects) = receive.recv().await.ok_or("API inspection was interrupted")?;
+    let (surface, effects) = receive
+        .recv()
+        .await
+        .ok_or("API inspection was interrupted")?;
     if std::env::args().nth(3).unwrap() == "material" && surface == "null" {
         return Err("The real WebView host has no attached backdrop".into());
     }
