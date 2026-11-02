@@ -1,5 +1,3 @@
-#![windows_subsystem = "windows"]
-
 #[path = "../src/material.rs"]
 mod material;
 type Rect = [i32; 4];
@@ -53,7 +51,7 @@ async fn ready(app: AppHandle, window: WebviewWindow) -> Result<(), String> {
     })
     .map_err(|e| e.to_string())?;
     let active = receive.recv().await.ok_or("CI host was closed")??;
-    window.eval(&format!(
+    window.eval(format!(
         "document.querySelector('.flyout').dataset.backdrop = '{}'; requestAnimationFrame(()=>requestAnimationFrame(()=>window.__TAURI_INTERNALS__.invoke('painted',{{active:{active}}})));",
         if std::env::args().nth(3).unwrap() == "fallback" { "false" } else { "true" }
     )).map_err(|e| e.to_string())

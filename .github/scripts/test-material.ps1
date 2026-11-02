@@ -17,7 +17,7 @@ foreach ($theme in 'light', 'dark') {
                 $deadline = [DateTime]::UtcNow.AddSeconds(30)
                 while (!(Test-Path -LiteralPath $marker)) {
                     if ($process.HasExited -or [DateTime]::UtcNow -gt $deadline) {
-                        throw "Material CI host did not become ready: $theme/$mode; $(Get-Content -LiteralPath $stderr -Raw)"
+                        throw "Material CI host did not become ready: $theme/$mode; exit=$($process.ExitCode); $(Get-Content -LiteralPath $stderr -Raw)"
                     }
                     Start-Sleep -Milliseconds 100
                 }
