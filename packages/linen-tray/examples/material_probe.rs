@@ -1,7 +1,7 @@
 mod material {
     include!("../src/material.rs");
 
-    pub(super) fn inspect(hwnd: HWND, dom: [f64; 4], scale: f64, expected_visible: bool) -> String {
+    pub(super) fn inspect(hwnd: HWND, dom: [f64; 4], scale: f64, settled: bool) -> String {
         use windows::UI::Composition::{CompositionBackdropBrush, CompositionGeometricClip};
         use windows::Win32::System::WinRT::Composition::IDesktopWindowTargetInterop;
 
@@ -30,17 +30,20 @@ mod material {
             assert_eq!([radius.X, radius.Y], [(8.0 * scale) as f32; 2]);
             let offset = root.Offset().unwrap();
             let visible = root.IsVisible().unwrap();
-            let suspended = SUSPENDED.with(Cell::get);
-            assert_eq!(visible, expected_visible);
-            assert_eq!(suspended, !expected_visible);
+            assert!(visible, "material stays visible throughout the transition");
             let bounds = [offset.X, offset.Y, offset.X + size.X, offset.Y + size.Y];
-            if visible {
+            if settled {
                 for (actual, expected) in bounds.into_iter().zip(dom) {
                     assert!((actual as f64 - expected * scale).abs() <= 1.0);
                 }
+            } else {
+                assert!(bounds[0] as f64 >= dom[0] * scale - 1.0);
+                assert!(bounds[1] as f64 >= dom[1] * scale - 1.0);
+                assert!(bounds[2] as f64 <= dom[2] * scale + 1.0);
+                assert!(bounds[3] as f64 <= dom[3] * scale + 1.0);
             }
             format!(
-                "{{\"visible\":{visible},\"suspended\":{suspended},\"bounds\":{bounds:?},\"clipSize\":[{},{}],\"radius\":[{},{}]}}",
+                "{{\"visible\":{visible},\"bounds\":{bounds:?},\"clipSize\":[{},{}],\"radius\":[{},{}]}}",
                 clip_size.X, clip_size.Y, radius.X, radius.Y
             )
         })
@@ -72,14 +75,9 @@ async fn resize_flyout(
     app: AppHandle,
     window: WebviewWindow,
     height: f64,
-    reserve: Option<f64>,
-    settled: Option<bool>,
 ) -> Result<Layout, String> {
     if !height.is_finite() || !(1.0..=575.0).contains(&height) {
         return Err("Invalid probe height".into());
-    }
-    if reserve.is_some() {
-        material::suspend(&app).await?;
     }
     let (send, mut receive) = tauri::async_runtime::channel(1);
     app.run_on_main_thread(move || {
@@ -95,16 +93,17 @@ async fn resize_flyout(
                 size.height as i32 - px(13.0),
             ];
             let mode = std::env::args().nth(3).unwrap();
-            let active = mode == "material"
-                && material::update(hwnd, panel, scale, settled.unwrap_or(false));
+            let active = mode == "material" && material::update(hwnd, panel, scale);
             Ok(active)
         })();
         let _ = send.try_send(result);
     })
     .map_err(|e| e.to_string())?;
+    let backdrop = receive.recv().await.ok_or("CI host was closed")??;
+    material::commit(&app).await?;
     Ok(Layout {
         limit: 575.0,
-        backdrop: receive.recv().await.ok_or("CI host was closed")??,
+        backdrop,
     })
 }
 
@@ -168,10 +167,10 @@ async fn record_frame(
     }
     let (send, mut receive) = tauri::async_runtime::channel(1);
     let host = window.clone();
-    let expected_visible = stage == "initial" || stage.ends_with("-settled");
+    let settled = stage == "initial" || stage.ends_with("-settled");
     app.run_on_main_thread(move || {
         let hwnd = HWND(host.hwnd().unwrap().0);
-        let surface = material::inspect(hwnd, panel, scale, expected_visible);
+        let surface = material::inspect(hwnd, panel, scale, settled);
         let effects = windows::UI::ViewManagement::UISettings::new()
             .and_then(|settings| settings.AdvancedEffectsEnabled())
             .unwrap_or(false);

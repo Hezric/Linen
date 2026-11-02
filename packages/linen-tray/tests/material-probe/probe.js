@@ -13,12 +13,13 @@ addEventListener('DOMContentLoaded', async () => {
       await new Promise(requestAnimationFrame);
       await new Promise(requestAnimationFrame);
     };
-    const record = async stage => {
-      await frames();
-      if (window.probeMode === 'fallback' || stage.includes('-frame-')) {
+    const record = async (stage, waitForPaint = true) => {
+      if (waitForPaint) await frames();
+      if (window.probeMode === 'fallback') {
         const expected = window.probeTheme === 'dark' ? 'rgb(28, 28, 28)' : 'rgb(238, 238, 238)';
         if (getComputedStyle(panel).backgroundColor !== expected) throw Error('Opaque fallback was not rendered');
       }
+      if (window.probeMode === 'material' && panel.dataset.backdrop !== 'true') throw Error('Material disappeared during transition');
       const r = panel.getBoundingClientRect();
       await invoke('record_frame', { stage, panel: [r.left, r.top, r.right, r.bottom] });
     };
@@ -26,7 +27,7 @@ addEventListener('DOMContentLoaded', async () => {
     let phase = '', frame = 0;
     const fit = fitPanel(document, async (command, args) => {
       // Observe the DOM frame before its matching native clip update can arrive.
-      if (phase && args.reserve === undefined && !args.settled) await record(`${phase}-frame-${frame++}`);
+      if (phase && args.reserve === undefined && !args.settled) await record(`${phase}-frame-${frame++}`, false);
       const layout = await invoke(command, args);
       if (window.probeMode === 'material' && args.settled && !layout.backdrop) throw Error('Native material unavailable');
       return layout;

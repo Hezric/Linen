@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.7]
+
+### Fixes
+
+- keep material live through clipped height transitions
+- wait for the larger card to render before growing the native clip
+
 ## [0.1.6]
 
 ### Fixes
