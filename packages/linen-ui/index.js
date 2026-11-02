@@ -81,11 +81,13 @@ export function fitPanel(root, invoke) {
       while (true) {
         if (target > reserved) {
           const reservation = Math.max(current || from, target);
-          const layout = await invoke('resize_flyout', {height:current || from, reserve:reservation});
+          const height = brush || from;
+          requested = height;
+          const layout = await invoke('resize_flyout', {height, reserve:reservation});
           panel.dataset.backdrop = String(layout.backdrop === true);
           limit = Math.floor(layout.limit);
           reserved = Math.min(reservation, limit);
-          brush = requested = Math.min(current || from, limit);
+          brush = requested = Math.min(height, limit);
           panel.style.maxHeight = limit + 'px';
           if (target > limit) {from = Math.min(current || from, limit); target = limit; started = performance.now();}
           continue;
@@ -143,9 +145,18 @@ export function fitPanel(root, invoke) {
             await new Promise(requestAnimationFrame);
           }
           if (current !== target) continue;
-          const settled = await invoke('resize_flyout', {height:current, settled:true});
+          const height = current;
+          const settled = await invoke('resize_flyout', {height, settled:true});
           panel.dataset.backdrop = String(settled.backdrop === true);
-          reserved = current;
+          const nextLimit = Math.floor(settled.limit);
+          brush = requested = reserved = Math.min(height, nextLimit);
+          if (limit !== nextLimit) {
+            limit = nextLimit;
+            current = Math.min(current, limit);
+            panel.style.height = current + 'px';
+            panel.style.maxHeight = limit + 'px';
+            fit();
+          }
           if (current === target) return;
         }
         if (document.body.classList.contains('presented')) await frame();

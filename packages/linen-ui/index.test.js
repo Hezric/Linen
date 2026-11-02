@@ -141,6 +141,62 @@ test('an unchanged open panel refreshes geometry and recovers after the work are
   await fit(true);
   assert.equal(applied.height,300,'larger work areas must restore the natural height');
 });
+
+test('animated stable panels consume work-area limits returned by a geometry refresh',async t=>{
+  const root=panelEnvironment(t,300), panel=root.querySelector('.flyout');
+  globalThis.matchMedia=()=>({matches:false});
+  globalThis.requestAnimationFrame=callback=>setTimeout(()=>callback(performance.now()),8);
+  globalThis.cancelAnimationFrame=clearTimeout;
+  let limit=800, scrolling=false;
+  root.querySelector('#views').classList.toggle=(_,value)=>{scrolling=value;};
+  const fit=fitPanel(root,async()=>({limit,backdrop:true}));
+  await fit();
+  globalThis.document.body.classList.contains=()=>true;
+  limit=200;
+  await fit(true);
+  assert.equal(panel.style.maxHeight,'200px');
+  assert.equal(panel.style.height,'200px');
+  assert.equal(scrolling,true);
+  limit=800;
+  await fit(true);
+  await fit();
+  assert.equal(panel.style.height,'300px');
+  assert.equal(scrolling,false);
+});
+
+test('a held larger reservation cannot outgrow the card after an animated reversal',async t=>{
+  const root=panelEnvironment(t,180), panel=root.querySelector('.flyout');
+  globalThis.matchMedia=()=>({matches:false});
+  globalThis.requestAnimationFrame=callback=>setTimeout(()=>callback(performance.now()),8);
+  globalThis.cancelAnimationFrame=clearTimeout;
+  const entered=Promise.withResolvers(), release=Promise.withResolvers();
+  let requestedBrush, cardAtCommit;
+  const fit=fitPanel(root,async(_,args)=>{
+    if(args.reserve===500) {
+      requestedBrush=args.height;
+      entered.resolve();
+      await release.promise;
+      cardAtCommit=parseFloat(panel.style.height);
+    }
+    await new Promise(resolve=>setTimeout(resolve,12));
+    return {limit:800,backdrop:true};
+  });
+  await fit();
+  globalThis.document.body.classList.contains=()=>true;
+  panel.scrollHeight=350;
+  const pending=fit();
+  await new Promise(resolve=>setTimeout(resolve,80));
+  panel.scrollHeight=500;
+  assert.equal(fit(),pending);
+  await entered.promise;
+  panel.scrollHeight=180;
+  assert.equal(fit(),pending);
+  await new Promise(resolve=>setTimeout(resolve,100));
+  release.resolve();
+  await pending;
+  assert.ok(cardAtCommit>=requestedBrush,`card ${cardAtCommit} must contain pending brush ${requestedBrush}`);
+  assert.equal(panel.style.height,'180px');
+});
 test('shrinking keeps the live material inside the DOM until its smaller clip is acknowledged', async t=>{
   const root=panelEnvironment(t,300), panel=root.querySelector('.flyout');
   const entered=Promise.withResolvers(), release=Promise.withResolvers();
