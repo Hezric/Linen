@@ -633,7 +633,10 @@ pub async fn resize_flyout(
                 }
                 *region_height = next;
                 *surface_shared.panel.lock().unwrap() = Some(panel);
-                Ok::<_, String>((placement, crate::material::update(hwnd, panel, geometry.scale)))
+                Ok::<_, String>((
+                    placement,
+                    crate::material::update(hwnd, panel, geometry.scale),
+                ))
             })();
             let _ = send.send(result);
         })

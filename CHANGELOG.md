@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.7]
+
+### Fixes
+
+- keep material live through clipped height transitions
+
 ## [0.1.6]
 
 ### Fixes
