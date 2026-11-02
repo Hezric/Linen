@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.6]
+
+### Fixes
+
+- align geometry and surface with the system shell (#19)
+
 ## [0.1.5]
 
 ### Fixes
