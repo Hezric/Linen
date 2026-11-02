@@ -8,7 +8,8 @@ $results = @()
 function Capture-Screen($meta, $path) {
     $bitmap = [Drawing.Bitmap]::new([int]$meta.width, [int]$meta.height)
     $graphics = [Drawing.Graphics]::FromImage($bitmap)
-    try { $graphics.CopyFromScreen($meta.x, $meta.y, 0, 0, $bitmap.Size) } finally { $graphics.Dispose() }
+    $operation = [Drawing.CopyPixelOperation]::SourceCopy -bor [Drawing.CopyPixelOperation]::CaptureBlt
+    try { $graphics.CopyFromScreen($meta.x, $meta.y, 0, 0, $bitmap.Size, $operation) } finally { $graphics.Dispose() }
     $bitmap.Save($path)
     $bitmap
 }
@@ -24,6 +25,19 @@ function Roughness($bitmap, $scale) {
         }
     }
     $sum / $count
+}
+function Background-Contrast($bitmap, $scale) {
+    $left = 0.0; $right = 0.0; $count = 0
+    for ($y = 400; $y -lt 460; $y++) {
+        for ($x = 100; $x -lt 160; $x++) {
+            $a = $bitmap.GetPixel([int]($x * $scale), [int]($y * $scale))
+            $b = $bitmap.GetPixel([int](($x + 180) * $scale), [int]($y * $scale))
+            $left += [int]$a.R + $a.G + $a.B
+            $right += [int]$b.R + $b.G + $b.B
+            $count++
+        }
+    }
+    ($left - $right) / $count
 }
 foreach ($theme in 'light', 'dark') {
     $shots = @{}
@@ -70,6 +84,12 @@ foreach ($theme in 'light', 'dark') {
         if ($control -lt 1 -or $material -ge $control * 0.5) {
             throw "HostBackdrop did not visibly blur behind WebView/layered host: $theme control=$control material=$material fallback=$fallback"
         }
+        $controlContrast = Background-Contrast $shots['transparent-initial'] $scale
+        $materialContrast = Background-Contrast $shots['material-initial'] $scale
+        $fallbackContrast = Background-Contrast $shots['fallback-initial'] $scale
+        if ($controlContrast -lt 10 -or $materialContrast -lt $controlContrast * 0.25 -or [Math]::Abs($fallbackContrast) -gt 1) {
+            throw "Material lost the background's coarse color signal: $theme control=$controlContrast material=$materialContrast fallback=$fallbackContrast"
+        }
         $outsideChanges = 0
         $frames = 0
         foreach ($key in @($shots.Keys | Where-Object { $_ -like 'material-*' -and $_ -ne 'material-background' })) {
@@ -104,7 +124,7 @@ foreach ($theme in 'light', 'dark') {
             }
         }
         if ($edgeChanges -gt 2) { throw "Material escaped rounded card: $theme; $edgeChanges pixels" }
-        $results += @{ theme = $theme; transparentRoughness = $control; materialRoughness = $material; fallbackRoughness = $fallback; outsideChanges = $outsideChanges; edgeChanges = $edgeChanges; transitionFrames = $frames }
+        $results += @{ theme = $theme; transparentRoughness = $control; materialRoughness = $material; fallbackRoughness = $fallback; controlContrast = $controlContrast; materialContrast = $materialContrast; fallbackContrast = $fallbackContrast; outsideChanges = $outsideChanges; edgeChanges = $edgeChanges; transitionFrames = $frames }
     } finally {
         foreach ($bitmap in $shots.Values) { $bitmap.Dispose() }
     }

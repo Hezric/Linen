@@ -49,8 +49,9 @@ async fn resize_flyout(
                 size.height as i32 - px(13.0),
             ];
             let mode = std::env::args().nth(3).unwrap();
-            Ok(mode == "material"
-                && material::update(hwnd, panel, scale, settled.unwrap_or(false)))
+            let active = mode == "material"
+                && material::update(hwnd, panel, scale, settled.unwrap_or(false));
+            Ok(active)
         })();
         let _ = send.try_send(result);
     })
@@ -70,8 +71,7 @@ fn show(window: WebviewWindow) -> Result<(), String> {
     unsafe {
         let style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
         SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style | WS_EX_LAYERED.0 as isize);
-        SetLayeredWindowAttributes(hwnd, COLORREF(0), 255, LWA_ALPHA)
-            .map_err(|e| e.to_string())?;
+        SetLayeredWindowAttributes(hwnd, COLORREF(0), 255, LWA_ALPHA).map_err(|e| e.to_string())?;
         let region = CreateRectRgn(
             0,
             (270.0 * scale).round() as i32,
