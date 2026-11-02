@@ -92,6 +92,7 @@ export function fitPanel(root, invoke) {
         }
         if (current !== target) continue;
         const settled = await invoke('resize_flyout', {height:current, settled:true});
+        suspended = false;
         panel.dataset.backdrop = String(settled.backdrop === true);
         reserved = current;
         if (current === target) return;
