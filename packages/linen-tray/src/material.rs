@@ -104,7 +104,10 @@ pub(crate) fn update(hwnd: HWND, panel: crate::Rect, scale: f64) -> bool {
             }
             return false;
         }
-        if slot.as_ref().is_none_or(|(owner, _)| *owner != hwnd.0 as isize) {
+        if slot
+            .as_ref()
+            .is_none_or(|(owner, _)| *owner != hwnd.0 as isize)
+        {
             let surface = Material::new(hwnd);
             if let Err(error) = &surface {
                 eprintln!("Flyout backdrop: {error}");
@@ -133,9 +136,7 @@ mod tests {
     use windows::{
         Win32::{
             System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx, CoUninitialize},
-            UI::WindowsAndMessaging::{
-                CreateWindowExW, DestroyWindow, WINDOW_EX_STYLE, WS_POPUP,
-            },
+            UI::WindowsAndMessaging::{CreateWindowExW, DestroyWindow, WINDOW_EX_STYLE, WS_POPUP},
         },
         core::w,
     };
