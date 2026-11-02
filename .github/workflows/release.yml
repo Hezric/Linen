@@ -14,5 +14,6 @@ jobs:
     uses: ./.github/workflows/windows-release.yml
     with:
       tag: ${{ inputs.tag || github.ref_name }}
+      version-fields: '{"package.json":[".version"],"package-lock.json":[".version",".packages[\"\"].version"],"packages/linen-tray/Cargo.toml":[".package.version"],"Cargo.lock":[".package[] | select(.name == \"linen-tray\") | .version"]}'
       manifest: Cargo.toml
       build-command: vp run build

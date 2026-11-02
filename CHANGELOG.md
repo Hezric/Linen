@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.0]
+
+### Fixes
+
+- retain status-only tray buttons (#30)
+
+- bound cargo caches per checkout
+
+- skip docs builds and validate release versions **BREAKING**
+
 ## [0.1.9]
 
 ### Fixes

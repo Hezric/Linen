@@ -5,6 +5,10 @@ on:
       tag:
         type: string
         required: true
+      version-fields:
+        description: JSON mapping version files to arrays of yq expressions
+        type: string
+        required: true
       frontend:
         type: boolean
         default: true
@@ -39,8 +43,6 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/git/tags/$(git rev-parse "$RELEASE_TAG")" --jq '.verification.verified' | grep -qx true
           test "$(git rev-parse "$RELEASE_TAG^{}")" = "$(git rev-parse HEAD)"
           git merge-base --is-ancestor HEAD origin/main
-          subject=$(git log -1 --format=%s)
-          [[ "$subject" == "chore(release): $RELEASE_TAG" || "$subject" == "chore(release): $RELEASE_TAG (#"*")" ]]
       - uses: voidzero-dev/setup-vp@v1.22.0
         if: inputs.frontend
         with:
@@ -59,6 +61,27 @@ jobs:
           #requires -Version 7.0
           scoop install yq
           if (Test-Path ./scripts/scoop/cargo-about.json) { scoop install (Resolve-Path ./scripts/scoop/cargo-about.json).Path }
+      - name: Check declared version fields
+        shell: pwsh
+        env:
+          VERSION_FIELDS: ${{ inputs.version-fields }}
+        run: |
+          #requires -Version 7.0
+          $ErrorActionPreference = 'Stop'
+          $fields = $env:VERSION_FIELDS | ConvertFrom-Json -AsHashtable
+          if ($fields -isnot [Collections.IDictionary] -or $fields.Count -eq 0) { throw 'Declare every package version file in a JSON object.' }
+          foreach ($entry in $fields.GetEnumerator()) {
+            $file = $entry.Key
+            $format = if ([IO.Path]::GetExtension($file) -in '.toml', '.lock' -and $file -notlike '*package-lock.json') { 'toml' } else { 'json' }
+            if ($entry.Value -isnot [array] -or $entry.Value.Count -eq 0) { throw "Declare a nonempty version field array for $file" }
+            foreach ($field in $entry.Value) {
+              if ($field -isnot [string] -or !$field) { throw "Invalid version expression for $file" }
+              $values = @(yq -p $format -o json -r $field $file)
+              if ($LASTEXITCODE -or $values.Count -ne 1 -or $values[0] -cne $env:RELEASE_TAG.Substring(1)) {
+                throw "Tag and declared version differ: $file $field"
+              }
+            }
+          }
       - name: Check and build
         shell: pwsh
         run: |
@@ -79,8 +102,6 @@ jobs:
           }
           ${{ inputs.build-command }}
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          $version = if ('${{ inputs.frontend }}' -eq 'true') { yq -r '.version' package.json } else { yq -r '.package.version' '${{ inputs.manifest }}' }
-          if ("v$version" -ne $env:RELEASE_TAG) { throw 'Tag and package versions differ' }
       - name: Package
         shell: pwsh
         run: ./scripts/package.ps1
