@@ -97,7 +97,16 @@ export function materialChecks(test, expect, snapshot) {
       await expect(panel).toHaveCSS('background-color', dark ? 'rgb(28, 28, 28)' : 'rgb(238, 238, 238)');
       await page.screenshot({ path: test.info().outputPath('fallback.png') });
       await page.emulateMedia({ forcedColors: 'active' });
-      await expect(panel).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+      const canvas = await page.evaluate(() => {
+        const probe = document.createElement('i');
+        probe.style.background = 'Canvas';
+        document.body.append(probe);
+        const color = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return color;
+      });
+      await expect(panel).toHaveCSS('background-color', canvas);
+      await page.screenshot({ path: test.info().outputPath('high-contrast.png') });
     });
   }
 }
