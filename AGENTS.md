@@ -19,6 +19,8 @@ Labels map ticket state: `ready-for-agent` -> `in-progress` -> `done`; a blocked
 - A direct push must fast-forward main to the exact signed SHA already green on another branch and based on current main. Bot automation follows the same requirement or opens a PR. Keep the main ruleset free of bypass actors.
 - Dependabot branches keep their native `dependabot/` names; their branch check alone is exempt. Scoped messages, tests, signatures, and squash merge still apply. Group updates weekly by ecosystem and allow automatic squash merge after CI.
 
+Before native tooltip, material, motion or update-retention checks, read [tray verification](docs/verification.md).
+
 ## Delivery closeout
 
 Finish authorized integration, release, distribution, installation and readback before ending. Close completed issues with evidence, safely remove owned temporary branches and test resources by exact identity, and synchronize both READMEs with the delivered result. Confirm merged PRs or main reachability before branch deletion; preserve unmerged work and unrelated resources.

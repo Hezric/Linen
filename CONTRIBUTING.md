@@ -16,3 +16,5 @@ Maintainers release only on explicit user authorization: git-cliff prepares the 
 Report vulnerabilities privately using the repository Security tab. Contributions use the repository's MIT license.
 
 The [project build cache](docs/features/build-cache.md) keeps intermediate output in system temp and prunes it before reuse. Verify it with `pwsh -NoProfile -File scripts/test-build-cache.ps1`.
+
+For native tooltip, material, motion and update-retention checks, follow [tray verification](docs/verification.md).
