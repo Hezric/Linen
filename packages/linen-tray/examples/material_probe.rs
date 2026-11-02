@@ -49,7 +49,7 @@ async fn resize_flyout(
                 size.height as i32 - px(13.0),
             ];
             let mode = std::env::args().nth(3).unwrap();
-            let active = mode == "material"
+            let active = matches!(mode.as_str(), "material" | "unlayered")
                 && material::update(hwnd, panel, scale, settled.unwrap_or(false));
             Ok(active)
         })();
@@ -70,8 +70,10 @@ fn show(window: WebviewWindow) -> Result<(), String> {
     let size = window.inner_size().map_err(|e| e.to_string())?;
     unsafe {
         let style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
-        SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style | WS_EX_LAYERED.0 as isize);
-        SetLayeredWindowAttributes(hwnd, COLORREF(0), 255, LWA_ALPHA).map_err(|e| e.to_string())?;
+        if std::env::args().nth(3).unwrap() != "unlayered" {
+            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style | WS_EX_LAYERED.0 as isize);
+            SetLayeredWindowAttributes(hwnd, COLORREF(0), 255, LWA_ALPHA).map_err(|e| e.to_string())?;
+        }
         let region = CreateRectRgn(
             0,
             (270.0 * scale).round() as i32,
@@ -100,7 +102,7 @@ async fn capture(window: WebviewWindow, stage: String, panel: [f64; 4]) -> Resul
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
     let hwnd = HWND(window.hwnd().map_err(|e| e.to_string())?.0);
     let layered = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) } & WS_EX_LAYERED.0 as isize != 0;
-    if !background && !layered {
+    if !background && !layered && std::env::args().nth(3).unwrap() != "unlayered" {
         return Err("Probe lost its layered host style".into());
     }
     tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {

@@ -25,7 +25,7 @@ addEventListener('DOMContentLoaded', async () => {
       // Observe the DOM frame before its matching native clip update can arrive.
       if (phase && args.reserve === undefined && !args.settled) await capture(`${phase}-frame-${frame++}`);
       const layout = await invoke(command, args);
-      if (window.probeMode === 'material' && args.settled && !layout.backdrop) throw Error('Native material unavailable');
+      if (['material', 'unlayered'].includes(window.probeMode) && args.settled && !layout.backdrop) throw Error('Native material unavailable');
       if (window.probeMode === 'transparent') layout.backdrop = true;
       return layout;
     });

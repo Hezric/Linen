@@ -6,9 +6,6 @@ using System;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 public static class LayeredCapture {
-    [DllImport("user32.dll")] public static extern int GetSystemMetrics(int index);
-    [DllImport("user32.dll", EntryPoint = "SystemParametersInfoW", CharSet = CharSet.Unicode, SetLastError = true)] public static extern bool GetWallpaper(uint action, uint length, System.Text.StringBuilder path, uint flags);
-    [DllImport("user32.dll", EntryPoint = "SystemParametersInfoW", CharSet = CharSet.Unicode, SetLastError = true)] public static extern bool SetWallpaper(uint action, uint length, string path, uint flags);
     [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr window);
     [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr window, IntPtr dc);
     [DllImport("gdi32.dll", SetLastError = true)] static extern bool BitBlt(IntPtr target, int x, int y, int width, int height, IntPtr source, int sx, int sy, uint operation);
@@ -25,26 +22,6 @@ $root = Join-Path $PWD 'material-probe-results'
 New-Item -ItemType Directory -Path $root -Force | Out-Null
 $exe = Join-Path $PWD 'target/debug/examples/material_probe.exe'
 $results = @()
-$originalWallpaper = [Text.StringBuilder]::new(32768)
-if (![LayeredCapture]::GetWallpaper(0x73, $originalWallpaper.Capacity, $originalWallpaper, 0)) { throw 'Cannot read CI wallpaper' }
-$wallpaper = Join-Path $root 'wallpaper.bmp'
-$width = [LayeredCapture]::GetSystemMetrics(0)
-$height = [LayeredCapture]::GetSystemMetrics(1)
-$fixture = [Drawing.Bitmap]::new($width, $height)
-$paint = [Drawing.Graphics]::FromImage($fixture)
-$red = [Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(128, 240, 0, 0))
-$blue = [Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(128, 0, 128, 255))
-try {
-    $paint.Clear([Drawing.Color]::White)
-    $paint.FillRectangle([Drawing.Brushes]::Black, 350, 0, $width - 350, $height)
-    for ($y = 0; $y -lt $height; $y += 4) {
-        for ($x = 0; $x -lt $width; $x += 4) {
-            $brush = if (([int]($x / 4) + [int]($y / 4)) % 2) { $blue } else { $red }
-            $paint.FillRectangle($brush, $x, $y, 4, 4)
-        }
-    }
-    $fixture.Save($wallpaper, [Drawing.Imaging.ImageFormat]::Bmp)
-} finally { $paint.Dispose(); $fixture.Dispose(); $red.Dispose(); $blue.Dispose() }
 function Capture-Screen($meta, $path) {
     $bitmap = [Drawing.Bitmap]::new([int]$meta.width, [int]$meta.height)
     $graphics = [Drawing.Graphics]::FromImage($bitmap)
@@ -80,13 +57,11 @@ function Background-Contrast($bitmap, $scale) {
     }
     ($left - $right) / $count
 }
-try {
-if (![LayeredCapture]::SetWallpaper(0x14, 0, $wallpaper, 3)) { throw 'Cannot set the disposable CI wallpaper fixture' }
 foreach ($theme in 'light', 'dark') {
     $shots = @{}
     $metadata = @{}
     try {
-        foreach ($mode in 'transparent', 'material', 'fallback') {
+        foreach ($mode in 'transparent', 'material', 'unlayered', 'fallback') {
             $marker = Join-Path $root "$theme-$mode.json"
             $stdout = Join-Path $root "$theme-$mode.stdout.log"
             $stderr = Join-Path $root "$theme-$mode.stderr.log"
@@ -130,6 +105,8 @@ foreach ($theme in 'light', 'dark') {
         $controlContrast = Background-Contrast $shots['transparent-initial'] $scale
         $materialContrast = Background-Contrast $shots['material-initial'] $scale
         $fallbackContrast = Background-Contrast $shots['fallback-initial'] $scale
+        $unlayeredContrast = Background-Contrast $shots['unlayered-initial'] $scale
+        Write-Output "Native background contrast: $theme control=$controlContrast material=$materialContrast unlayered=$unlayeredContrast fallback=$fallbackContrast"
         if ($controlContrast -lt 10 -or $materialContrast -lt $controlContrast * 0.25 -or [Math]::Abs($fallbackContrast) -gt 1) {
             throw "Material lost the background's coarse color signal: $theme control=$controlContrast material=$materialContrast fallback=$fallbackContrast"
         }
@@ -173,6 +150,3 @@ foreach ($theme in 'light', 'dark') {
     }
 }
 $results | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'results.json') -Encoding utf8
-} finally {
-    if (![LayeredCapture]::SetWallpaper(0x14, 0, $originalWallpaper.ToString(), 3)) { throw 'Cannot restore the original CI wallpaper' }
-}
