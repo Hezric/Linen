@@ -3,6 +3,8 @@
 `linen-tray` owns Windows tray menus and the single-instance activation route.
 Consumers provide artwork, app identity, a pause callback and translated status;
 their workers retain hardware and settings ownership. Login startup is external.
+Tray tooltips show the consumer's translated status text without an app-name prefix.
+Before the first status update the icon has no tooltip.
 
 Scoop consumers call `relaunch_from_runtime` before starting their worker or Tauri.
 When the installation has a `runtime` directory, this launches the same executable

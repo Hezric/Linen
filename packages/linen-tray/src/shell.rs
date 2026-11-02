@@ -83,7 +83,6 @@ pub fn install(
         .ok_or_else(|| tauri::Error::AssetNotFound(config.initial.into()))?;
     TrayIconBuilder::with_id(config.id)
         .icon(Image::from_bytes(image)?)
-        .tooltip(config.title)
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(move |app, event| match event.id.as_ref() {
@@ -232,7 +231,7 @@ pub fn update_tray(
         }
     }
     if let Some(tray) = app.tray_by_id(shared.config.id) {
-        let _ = tray.set_tooltip(Some(format!("{} — {tooltip}", shared.config.title)));
+        let _ = tray.set_tooltip(Some(tooltip));
     }
     refresh_icon(app, (shared.clock.elapsed().as_millis() / 180) as usize);
     if animate {
