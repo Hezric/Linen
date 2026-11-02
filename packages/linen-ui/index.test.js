@@ -77,3 +77,19 @@ test('an unchanged open panel refreshes geometry and recovers after the work are
   await fit(true);
   assert.equal(applied.height,300,'larger work areas must restore the natural height');
 });
+test('shrinking waits for native backdrop suspension before changing DOM height', async t=>{
+  const root=panelEnvironment(t,300), panel=root.querySelector('.flyout');
+  const calls=[];
+  const fit=fitPanel(root,async(_,args)=>{
+    calls.push({args,domHeight:panel.style.height});
+    return {limit:800,backdrop:args.settled===true};
+  });
+  await fit();
+  calls.length=0;
+  panel.scrollHeight=180;
+  await fit();
+  assert.equal(calls[0].args.reserve,300,'reserve acknowledges suspension before DOM shrink');
+  assert.equal(calls[0].domHeight,'300px');
+  assert.equal(panel.style.height,'180px');
+  assert.equal(panel.dataset.backdrop,'true','only the settled response restores the material');
+});
