@@ -25,7 +25,7 @@ function panelEnvironment(t, natural) {
   globalThis.ResizeObserver=class {observe(){}};
   globalThis.requestAnimationFrame=callback=>queueMicrotask(callback);
   const views={children:[],classList:{toggle(){}}};
-  const panel={style:{},scrollHeight:natural,querySelector:()=>({}),getBoundingClientRect(){return {height:parseFloat(this.style.height)||natural};}};
+  const panel={style:{},dataset:{},scrollHeight:natural,querySelector:()=>({}),getBoundingClientRect(){return {height:parseFloat(this.style.height)||natural};}};
   return {querySelector:selector=>selector==='.flyout'?panel:views};
 }
 
