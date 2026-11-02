@@ -1,6 +1,23 @@
 #requires -Version 7.0
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
+Add-Type @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+public static class LayeredCapture {
+    [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr window);
+    [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr window, IntPtr dc);
+    [DllImport("gdi32.dll", SetLastError = true)] static extern bool BitBlt(IntPtr target, int x, int y, int width, int height, IntPtr source, int sx, int sy, uint operation);
+    public static void Copy(IntPtr target, int width, int height, int x, int y) {
+        var source = GetDC(IntPtr.Zero);
+        if (source == IntPtr.Zero) throw new Win32Exception();
+        try {
+            if (!BitBlt(target, 0, 0, width, height, source, x, y, 0x40CC0020)) throw new Win32Exception();
+        } finally { ReleaseDC(IntPtr.Zero, source); }
+    }
+}
+'@
 $root = Join-Path $PWD 'material-probe-results'
 New-Item -ItemType Directory -Path $root -Force | Out-Null
 $exe = Join-Path $PWD 'target/debug/examples/material_probe.exe'
@@ -8,8 +25,9 @@ $results = @()
 function Capture-Screen($meta, $path) {
     $bitmap = [Drawing.Bitmap]::new([int]$meta.width, [int]$meta.height)
     $graphics = [Drawing.Graphics]::FromImage($bitmap)
-    $operation = [Drawing.CopyPixelOperation]::SourceCopy -bor [Drawing.CopyPixelOperation]::CaptureBlt
-    try { $graphics.CopyFromScreen($meta.x, $meta.y, 0, 0, $bitmap.Size, $operation) } finally { $graphics.Dispose() }
+    # CopyFromScreen rejects the documented SRCCOPY | CAPTUREBLT combination.
+    $dc = $graphics.GetHdc()
+    try { [LayeredCapture]::Copy($dc, $bitmap.Width, $bitmap.Height, $meta.x, $meta.y) } finally { $graphics.ReleaseHdc($dc); $graphics.Dispose() }
     $bitmap.Save($path)
     $bitmap
 }
