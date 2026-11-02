@@ -77,7 +77,13 @@ export function fitPanel(root, invoke) {
         ? Math.min(1, (performance.now() - started) / 200) : 1;
       const height = Math.ceil(from + (target - from) * (1 - (1 - progress) ** 3));
       // Grow the card before its brush; shrink the committed brush before its card.
-      if (height >= current) panel.style.height = height + 'px';
+      if (height >= current) {
+        panel.style.height = height + 'px';
+        if (height > current && document.body.classList.contains('presented')) {
+          await new Promise(requestAnimationFrame);
+          await new Promise(requestAnimationFrame);
+        }
+      }
       const layout = await invoke('resize_flyout', {height});
       panel.style.height = height + 'px';
       panel.dataset.backdrop = String(layout.backdrop === true);
