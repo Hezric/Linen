@@ -61,7 +61,23 @@ export function fitPanel(root, invoke) {
   const views = root.querySelector('#views');
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   let current = 0, target = 0, from = 0, started = 0, limit = Infinity, reserved = 0, pending = null;
+  const frame = () => new Promise(requestAnimationFrame);
+  const heightAt = time => {
+    const progress = Math.min(1, Math.max(0, (time - started) / 200));
+    return Math.ceil(from + (target - from) * (1 - (1 - progress) ** 3));
+  };
   async function resize() {
+    let brush = current, requested = current, rendering = false, animation;
+    let painted = [current, current];
+    const animated = () => document.body.classList.contains('presented') && !reduced.matches;
+    function paint(time) {
+      painted = [painted[1], current];
+      // A pending larger brush must remain inside the card even after a reversal.
+      current = Math.min(reserved, Math.max(animated() ? heightAt(time) : target, brush, requested));
+      panel.style.height = current + 'px';
+      animation = requestAnimationFrame(paint);
+    }
+    try {
     while (true) {
       if (target > reserved) {
         const reservation = Math.max(current || from, target);
@@ -73,6 +89,35 @@ export function fitPanel(root, invoke) {
         if (target > limit) {from = Math.min(current || from, limit); target = limit; started = performance.now();}
         continue;
       }
+      if (animated()) {
+        if (!rendering) {
+          // Give shrink its first committed clip before starting the renderer clock.
+          if (target < current) {
+            const height = heightAt(started + 64);
+            const layout = await invoke('resize_flyout', {height});
+            brush = requested = height;
+            panel.dataset.backdrop = String(layout.backdrop === true);
+          }
+          started = performance.now();
+          painted = [current, current];
+          rendering = true;
+          animation = requestAnimationFrame(paint);
+        }
+        // Growth trails presented DOM frames; shrink reserves a committed lead.
+        const height = target < current
+          ? Math.min(current, heightAt(performance.now() + 64))
+          : Math.min(target, current, ...painted);
+        if (height !== brush) {
+          requested = height;
+          const layout = await invoke('resize_flyout', {height});
+          brush = height;
+          panel.dataset.backdrop = String(layout.backdrop === true);
+          limit = Math.floor(layout.limit);
+          if (target > limit) {from = Math.min(current, limit); target = limit; started = performance.now();}
+          panel.style.maxHeight = limit + 'px';
+        }
+        if (current !== target || brush !== target) {await frame(); continue;}
+      } else {
       const progress = document.body.classList.contains('presented') && !reduced.matches
         ? Math.min(1, (performance.now() - started) / 200) : 1;
       const height = Math.ceil(from + (target - from) * (1 - (1 - progress) ** 3));
@@ -91,6 +136,7 @@ export function fitPanel(root, invoke) {
       limit = Math.floor(layout.limit);
       if (target > limit) {from = Math.min(current, limit); target = limit; started = performance.now();}
       panel.style.maxHeight = `${limit}px`;
+      }
       if (current === target) {
         if (document.body.classList.contains('presented')) {
           await new Promise(requestAnimationFrame);
@@ -102,7 +148,10 @@ export function fitPanel(root, invoke) {
         reserved = current;
         if (current === target) return;
       }
-      if (document.body.classList.contains('presented')) await new Promise(requestAnimationFrame);
+      if (document.body.classList.contains('presented')) await frame();
+    }
+    } finally {
+      if (rendering) cancelAnimationFrame(animation);
     }
   }
   function fit(refresh = false) {

@@ -17,17 +17,47 @@ test('both consumers get one accessible shell with independent main and settings
 });
 
 function panelEnvironment(t, natural) {
-  const names=['document','matchMedia','ResizeObserver','requestAnimationFrame'];
+  const names=['document','matchMedia','ResizeObserver','requestAnimationFrame','cancelAnimationFrame'];
   const previous=names.map(name=>[name,Object.getOwnPropertyDescriptor(globalThis,name)]);
   t.after(()=>{for(const [name,descriptor] of previous){if(descriptor)Object.defineProperty(globalThis,name,descriptor);else delete globalThis[name];}});
   globalThis.document={body:{classList:{contains:()=>false}}};
   globalThis.matchMedia=()=>({matches:true});
   globalThis.ResizeObserver=class {observe(){}};
   globalThis.requestAnimationFrame=callback=>queueMicrotask(callback);
+  globalThis.cancelAnimationFrame=()=>{};
   const views={children:[],classList:{toggle(){}}};
   const panel={style:{},dataset:{},scrollHeight:natural,querySelector:()=>({}),getBoundingClientRect(){return {height:parseFloat(this.style.height)||natural};}};
   return {querySelector:selector=>selector==='.flyout'?panel:views};
 }
+
+test('card growth keeps rendering while a native material commit is pending', async t=>{
+  const root=panelEnvironment(t,180), panel=root.querySelector('.flyout');
+  const entered=Promise.withResolvers(), release=Promise.withResolvers();
+  let growing=false, held=false;
+  globalThis.matchMedia=()=>({matches:false});
+  globalThis.requestAnimationFrame=callback=>setTimeout(()=>callback(performance.now()),8);
+  globalThis.cancelAnimationFrame=clearTimeout;
+  const fit=fitPanel(root,async(_,args)=>{
+    if(growing && !held && !args.reserve && !args.settled && args.height>180) {
+      held=true; entered.resolve(); await release.promise;
+    }
+    return {limit:800,backdrop:true};
+  });
+  await fit();
+  globalThis.document.body.classList.contains=()=>true;
+  growing=true;
+  panel.scrollHeight=300;
+  const pending=fit();
+  await entered.promise;
+  const height=parseFloat(panel.style.height);
+  try {
+    await new Promise(resolve=>setTimeout(resolve,40));
+    assert.ok(parseFloat(panel.style.height)>height,'native commit latency must not stall the visible card');
+  } finally {
+    release.resolve();
+    await pending;
+  }
+});
 
 test('window fitting converges under a fractional work-area limit',async t=>{
   const root=panelEnvironment(t,900), heights=[];
