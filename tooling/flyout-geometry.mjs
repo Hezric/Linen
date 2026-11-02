@@ -64,3 +64,40 @@ export function geometryChecks(test, expect, snapshot) {
     });
   }
 }
+
+export function materialChecks(test, expect, snapshot) {
+  for (const dark of [false, true]) {
+    test(`native material and fallback (${dark ? 'dark' : 'light'})`, async ({ page }) => {
+      let backdrop = true;
+      await page.exposeFunction('materialLayout', () => ({ limit: 575, backdrop }));
+      await page.addInitScript(state => {
+        window.isTauri = true;
+        let id = 0;
+        window.__TAURI_INTERNALS__ = {
+          transformCallback() { return ++id; },
+          async invoke(command) {
+            if (command === 'plugin:event|listen') return 1;
+            if (command === 'snapshot') return state;
+            if (command === 'saved_networks') return { names: [], current: null };
+            if (command === 'resize_flyout') return window.materialLayout();
+            if (['prepare_flyout', 'present_flyout', 'dismiss_flyout'].includes(command)) return;
+            throw Error(`Unexpected simulated command ${command}`);
+          },
+        };
+      }, { ...snapshot, dark, accent: '#008060', accentInk: '#ffffff' });
+      await page.goto('/');
+      const panel = page.locator('.flyout');
+      await expect(page.locator('body')).toHaveClass(/presented/);
+      await expect(panel).toHaveAttribute('data-backdrop', 'true');
+      // The browser simulates a desktop behind the native host, not Windows blur.
+      await page.addStyleTag({ content: 'body.native { background:linear-gradient(120deg,#718b9b,#aebfa1); }' });
+      await page.screenshot({ path: test.info().outputPath('material.png') });
+      backdrop = false;
+      await expect(panel).toHaveAttribute('data-backdrop', 'false');
+      await expect(panel).toHaveCSS('background-color', dark ? 'rgb(28, 28, 28)' : 'rgb(238, 238, 238)');
+      await page.screenshot({ path: test.info().outputPath('fallback.png') });
+      await page.emulateMedia({ forcedColors: 'active' });
+      await expect(panel).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+    });
+  }
+}
