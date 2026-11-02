@@ -3,18 +3,14 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 Add-Type @'
 using System;
-using System.ComponentModel;
 using System.Runtime.InteropServices;
-public static class LayeredCapture {
-    [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr window);
-    [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr window, IntPtr dc);
-    [DllImport("gdi32.dll", SetLastError = true)] static extern bool BitBlt(IntPtr target, int x, int y, int width, int height, IntPtr source, int sx, int sy, uint operation);
-    public static void Copy(IntPtr target, int width, int height, int x, int y) {
-        var source = GetDC(IntPtr.Zero);
-        if (source == IntPtr.Zero) throw new Win32Exception();
-        try {
-            if (!BitBlt(target, 0, 0, width, height, source, x, y, 0x40CC0020)) throw new Win32Exception();
-        } finally { ReleaseDC(IntPtr.Zero, source); }
+public static class NativeScreenshot {
+    [DllImport("user32.dll")] static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
+    public static void Save() {
+        keybd_event(0x5b, 0, 0, UIntPtr.Zero);
+        keybd_event(0x2c, 0, 0, UIntPtr.Zero);
+        keybd_event(0x2c, 0, 2, UIntPtr.Zero);
+        keybd_event(0x5b, 0, 2, UIntPtr.Zero);
     }
 }
 '@
@@ -23,13 +19,28 @@ New-Item -ItemType Directory -Path $root -Force | Out-Null
 $exe = Join-Path $PWD 'target/debug/examples/material_probe.exe'
 $results = @()
 function Capture-Screen($meta, $path) {
-    $bitmap = [Drawing.Bitmap]::new([int]$meta.width, [int]$meta.height)
-    $graphics = [Drawing.Graphics]::FromImage($bitmap)
-    # CopyFromScreen rejects the documented SRCCOPY | CAPTUREBLT combination.
-    $dc = $graphics.GetHdc()
-    try { [LayeredCapture]::Copy($dc, $bitmap.Width, $bitmap.Height, $meta.x, $meta.y) } finally { $graphics.ReleaseHdc($dc); $graphics.Dispose() }
-    $bitmap.Save($path)
-    $bitmap
+    $screenshots = Join-Path ([Environment]::GetFolderPath('MyPictures')) 'Screenshots'
+    New-Item -ItemType Directory -Path $screenshots -Force | Out-Null
+    $before = @(Get-ChildItem -LiteralPath $screenshots -Filter '*.png' -File | ForEach-Object FullName)
+    [NativeScreenshot]::Save()
+    $deadline = [DateTime]::UtcNow.AddSeconds(5)
+    do {
+        Start-Sleep -Milliseconds 100
+        $files = @(Get-ChildItem -LiteralPath $screenshots -Filter '*.png' -File | Where-Object { $_.FullName -notin $before })
+        if ($files.Count -gt 1) { throw 'Ambiguous native CI screenshot output' }
+    } until ($files.Count -eq 1 -or [DateTime]::UtcNow -gt $deadline)
+    if ($files.Count -ne 1) { throw 'Windows did not save the native CI screenshot' }
+    Start-Sleep -Milliseconds 200
+    $file = $files[0].FullName
+    try {
+        $full = [Drawing.Bitmap]::new($file)
+        try {
+            $bounds = [Drawing.Rectangle]::new([int]$meta.x, [int]$meta.y, [int]$meta.width, [int]$meta.height)
+            $bitmap = $full.Clone($bounds, $full.PixelFormat)
+            $bitmap.Save($path)
+            $bitmap
+        } finally { $full.Dispose() }
+    } finally { Remove-Item -LiteralPath $file }
 }
 function Difference($a, $b) {
     [Math]::Abs([int]$a.R - $b.R) + [Math]::Abs([int]$a.G - $b.G) + [Math]::Abs([int]$a.B - $b.B)
