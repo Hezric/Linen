@@ -1,9 +1,9 @@
 @font-face { font-family: Inter; font-style: normal; font-weight: 100 900; font-display: block; src: url('./fonts/inter-latin.woff2') format('woff2'); }
 :root { font-family: Inter, "Noto Sans SC", "Segoe UI Variable", "Microsoft YaHei UI", sans-serif; font-feature-settings: "tnum" 1, "cv11" 1; font-variant-numeric: tabular-nums; font-synthesis: none; -webkit-font-smoothing: antialiased; color-scheme: light dark;
-  --bg:#f7f7f7; --card:#fff; --cardb:#0000000f; --text:#1b1b1b; --secondary:#5f5f5f; --muted:#8a8a8a; --line:#00000014; --accent:#005fb8; --accent-ink:#fff; --tint:color-mix(in srgb,var(--accent) 9%,transparent); --control:#0000000a; --hover:#00000012; --rail:#0000006b; --knob:#fff; --knobb:#00000014; --off:#0000009e; --shadow:0 8px 32px #00000024,0 0 0 1px #0000000f;
+  --bg:#eee; --surface:#f3f3f3e6; --card:#fff; --cardb:#0000000f; --text:#1b1b1b; --secondary:#5f5f5f; --muted:#8a8a8a; --line:#00000014; --accent:#005fb8; --accent-ink:#fff; --tint:color-mix(in srgb,var(--accent) 9%,transparent); --control:#0000000a; --hover:#00000012; --rail:#0000006b; --knob:#fff; --knobb:#00000014; --off:#0000009e; --shadow:0 8px 32px #00000024,0 0 0 1px #0000000f;
   color: var(--text); background: #dfe3e8; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme=light]) { --bg:#2a2a2a; --card:#323232; --cardb:#ffffff0f; --text:#fff; --secondary:#c8c8c8; --muted:#9a9a9a; --line:#ffffff14; --accent:#60cdff; --accent-ink:#000; --control:#ffffff0f; --hover:#ffffff17; --rail:#ffffff8a; --knob:#454545; --knobb:#ffffff14; --off:#ffffffb8; --shadow:0 8px 32px #00000066,0 0 0 1px #ffffff14; } }
-:root[data-theme=dark] { color-scheme:dark; --bg:#2a2a2a; --card:#323232; --cardb:#ffffff0f; --text:#fff; --secondary:#c8c8c8; --muted:#9a9a9a; --line:#ffffff14; --accent:#60cdff; --accent-ink:#000; --control:#ffffff0f; --hover:#ffffff17; --rail:#ffffff8a; --knob:#454545; --knobb:#ffffff14; --off:#ffffffb8; --shadow:0 8px 32px #00000066,0 0 0 1px #ffffff14; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme=light]) { --bg:#1c1c1c; --surface:#202020e6; --card:#323232; --cardb:#ffffff0f; --text:#fff; --secondary:#c8c8c8; --muted:#9a9a9a; --line:#ffffff14; --accent:#60cdff; --accent-ink:#000; --control:#ffffff0f; --hover:#ffffff17; --rail:#ffffff8a; --knob:#454545; --knobb:#ffffff14; --off:#ffffffb8; --shadow:0 8px 32px #00000066,0 0 0 1px #ffffff14; } }
+:root[data-theme=dark] { color-scheme:dark; --bg:#1c1c1c; --surface:#202020e6; --card:#323232; --cardb:#ffffff0f; --text:#fff; --secondary:#c8c8c8; --muted:#9a9a9a; --line:#ffffff14; --accent:#60cdff; --accent-ink:#000; --control:#ffffff0f; --hover:#ffffff17; --rail:#ffffff8a; --knob:#454545; --knobb:#ffffff14; --off:#ffffffb8; --shadow:0 8px 32px #00000066,0 0 0 1px #ffffff14; }
 :root[data-theme=light] { color-scheme:light; }
 * { box-sizing:border-box; cursor:default; }
 body { margin:0; height:100vh; display:flex; align-items:flex-end; justify-content:flex-end; padding:13px; overflow:hidden; user-select:none; -webkit-user-select:none; }
@@ -105,3 +105,6 @@ input[type=range]:active::-webkit-slider-thumb { border-width:6px; }
 
 /* Initial status messages must reach their final height before native entry. */
 body.native:not(.presented) * { transition:none !important; }
+
+.native .flyout[data-backdrop=true] { background:var(--surface); }
+@media (forced-colors:active) { .flyout, .native .flyout[data-backdrop=true] { background:Canvas; color:CanvasText; outline:1px solid CanvasText; } }

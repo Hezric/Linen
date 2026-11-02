@@ -77,6 +77,7 @@ export function fitPanel(root, invoke) {
       const height = Math.ceil(from + (target - from) * (1 - (1 - progress) ** 3));
       panel.style.height = height + 'px';
       const layout = await invoke('resize_flyout', {height});
+      panel.dataset.backdrop = String(layout.backdrop === true);
       current = height;
       limit = Math.floor(layout.limit);
       if (target > limit) {from = Math.min(current, limit); target = limit; started = performance.now();}

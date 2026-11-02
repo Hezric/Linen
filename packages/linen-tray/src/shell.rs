@@ -326,6 +326,9 @@ fn create_flyout(app: &AppHandle) {
             style_window(&window)?;
             let handle = window.clone();
             window.on_window_event(move |event| {
+                if matches!(event, tauri::WindowEvent::Destroyed) {
+                    crate::material::remove();
+                }
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                     api.prevent_close();
                 }
@@ -516,6 +519,7 @@ impl Geometry {
 #[serde(rename_all = "camelCase")]
 pub struct FlyoutLayout {
     limit: f64,
+    backdrop: bool,
 }
 
 #[tauri::command]
@@ -540,7 +544,7 @@ pub async fn resize_flyout(
     let limit = ((geometry.work[3] - geometry.work[1]) as f64 / geometry.scale - 45.0)
         .floor()
         .max(1.0);
-    tauri::async_runtime::spawn_blocking(move || {
+    let backdrop = tauri::async_runtime::spawn_blocking(move || {
         let mut layout = shared.layout.lock().unwrap();
         let existing = if geometry_changed { None } else { *layout };
         let surface_shared = shared.clone();
@@ -628,18 +632,19 @@ pub async fn resize_flyout(
                 }
                 *region_height = next;
                 *surface_shared.panel.lock().unwrap() = Some(panel);
-                Ok::<_, String>(placement)
+                Ok::<_, String>((placement, crate::material::update(hwnd, panel, geometry.scale)))
             })();
             let _ = send.send(result);
         })
         .map_err(|e| e.to_string())?;
-        *layout = Some(receive.recv().map_err(|e| e.to_string())??);
+        let (placement, backdrop) = receive.recv().map_err(|e| e.to_string())??;
+        *layout = Some(placement);
         *shared.geometry.lock().unwrap() = Some(geometry);
-        Ok::<_, String>(())
+        Ok::<_, String>(backdrop)
     })
     .await
     .map_err(|e| e.to_string())??;
-    Ok(FlyoutLayout { limit })
+    Ok(FlyoutLayout { limit, backdrop })
 }
 
 pub fn animations_enabled() -> bool {
