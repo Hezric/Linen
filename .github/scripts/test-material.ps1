@@ -5,8 +5,29 @@ $root = Join-Path $PWD 'material-probe-results'
 New-Item -ItemType Directory -Path $root -Force | Out-Null
 $exe = Join-Path $PWD 'target/debug/examples/material_probe.exe'
 $results = @()
+function Capture-Screen($meta, $path) {
+    $bitmap = [Drawing.Bitmap]::new([int]$meta.width, [int]$meta.height)
+    $graphics = [Drawing.Graphics]::FromImage($bitmap)
+    try { $graphics.CopyFromScreen($meta.x, $meta.y, 0, 0, $bitmap.Size) } finally { $graphics.Dispose() }
+    $bitmap.Save($path)
+    $bitmap
+}
+function Difference($a, $b) {
+    [Math]::Abs([int]$a.R - $b.R) + [Math]::Abs([int]$a.G - $b.G) + [Math]::Abs([int]$a.B - $b.B)
+}
+function Roughness($bitmap, $scale) {
+    $sum = 0.0; $count = 0
+    for ($y = [int](400 * $scale); $y -lt [int](460 * $scale); $y++) {
+        for ($x = [int](100 * $scale); $x -lt [int](220 * $scale); $x++) {
+            $sum += Difference $bitmap.GetPixel($x, $y) $bitmap.GetPixel($x + 1, $y)
+            $count++
+        }
+    }
+    $sum / $count
+}
 foreach ($theme in 'light', 'dark') {
     $shots = @{}
+    $metadata = @{}
     try {
         foreach ($mode in 'transparent', 'material', 'fallback') {
             $marker = Join-Path $root "$theme-$mode.json"
@@ -14,50 +35,76 @@ foreach ($theme in 'light', 'dark') {
             $stderr = Join-Path $root "$theme-$mode.stderr.log"
             $process = Start-Process -FilePath $exe -ArgumentList @($marker, $theme, $mode) -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
             try {
-                $deadline = [DateTime]::UtcNow.AddSeconds(30)
-                while (!(Test-Path -LiteralPath $marker)) {
-                    if ($process.HasExited -or [DateTime]::UtcNow -gt $deadline) {
-                        throw "Material CI host did not become ready: $theme/$mode; exit=$($process.ExitCode); $(Get-Content -LiteralPath $stderr -Raw)"
-                    }
-                    Start-Sleep -Milliseconds 100
+                $deadline = [DateTime]::UtcNow.AddSeconds(120)
+                while (!$process.HasExited -or (Test-Path -LiteralPath $marker)) {
+                    if ([DateTime]::UtcNow -gt $deadline) { throw "Material CI capture timed out: $theme/$mode" }
+                    if (!(Test-Path -LiteralPath $marker)) { Start-Sleep -Milliseconds 10; continue }
+                    $meta = Get-Content -LiteralPath $marker -Raw | ConvertFrom-Json
+                    $key = "$mode-$($meta.stage)"
+                    $shots[$key] = Capture-Screen $meta (Join-Path $root "$theme-$key.png")
+                    $metadata[$key] = $meta
+                    Copy-Item -LiteralPath $marker -Destination (Join-Path $root "$theme-$key.json")
+                    Remove-Item -LiteralPath $marker
+                    [IO.File]::WriteAllText([IO.Path]::ChangeExtension($marker, 'ack'), '')
                 }
-                $meta = Get-Content -LiteralPath $marker -Raw | ConvertFrom-Json
-                if ($mode -eq 'material' -and !$meta.active) { throw 'Native material was unavailable' }
-                $bitmap = [Drawing.Bitmap]::new($meta.width, $meta.height)
-                $graphics = [Drawing.Graphics]::FromImage($bitmap)
-                try { $graphics.CopyFromScreen($meta.x, $meta.y, 0, 0, $bitmap.Size) } finally { $graphics.Dispose() }
-                $bitmap.Save((Join-Path $root "$theme-$mode.png"))
-                $shots[$mode] = $bitmap
+                $process.WaitForExit()
+                if ($process.ExitCode -ne 0) {
+                    throw "Material CI host failed: $theme/$mode; exit=$($process.ExitCode); $(Get-Content -LiteralPath $stderr -Raw)"
+                }
+                foreach ($stage in 'initial', 'background', 'shrink-settled', 'grow-settled') {
+                    if (!$shots.ContainsKey("$mode-$stage")) { throw "Missing probe capture: $theme/$mode/$stage" }
+                }
+                foreach ($phase in 'shrink', 'grow') {
+                    if (!($shots.Keys -like "$mode-$phase-frame-*")) { throw "Missing transition frames: $theme/$mode/$phase" }
+                }
             } finally {
                 if (!$process.HasExited) { taskkill.exe /PID $process.Id /T /F | Out-Null }
                 if (!$process.WaitForExit(5000)) { throw "Owned CI process tree did not exit: $($process.Id)" }
                 $process.Dispose()
             }
         }
-        $scale = $meta.scale
-        function Roughness($bitmap) {
-            $sum = 0.0; $count = 0
-            for ($y = [int](400 * $scale); $y -lt [int](460 * $scale); $y++) {
-                for ($x = [int](100 * $scale); $x -lt [int](220 * $scale); $x++) {
-                    $a = $bitmap.GetPixel($x, $y); $b = $bitmap.GetPixel($x + 1, $y)
-                    $sum += [Math]::Abs($a.R - $b.R) + [Math]::Abs($a.G - $b.G) + [Math]::Abs($a.B - $b.B)
-                    $count++
-                }
-            }
-            $sum / $count
-        }
-        $control = Roughness $shots.transparent
-        $material = Roughness $shots.material
+        $scale = $metadata['material-initial'].scale
+        $control = Roughness $shots['transparent-initial'] $scale
+        $material = Roughness $shots['material-initial'] $scale
+        $fallback = Roughness $shots['fallback-initial'] $scale
         if ($control -lt 1 -or $material -ge $control * 0.5) {
-            throw "HostBackdrop did not visibly blur behind WebView/layered host: $theme control=$control material=$material"
+            throw "HostBackdrop did not visibly blur behind WebView/layered host: $theme control=$control material=$material fallback=$fallback"
         }
         $outsideChanges = 0
-        for ($y = [int](330 * $scale); $y -lt [int](550 * $scale); $y++) {
-            $x = [int](5 * $scale)
-            if ($shots.material.GetPixel($x, $y).ToArgb() -ne $shots.transparent.GetPixel($x, $y).ToArgb()) { $outsideChanges++ }
+        $frames = 0
+        foreach ($key in @($shots.Keys | Where-Object { $_ -like 'material-*' -and $_ -ne 'material-background' })) {
+            $meta = $metadata[$key]
+            $bitmap = $shots[$key]
+            $background = $shots['material-background']
+            $changes = 0
+            for ($y = 0; $y -lt $bitmap.Height; $y += 4) {
+                for ($x = 0; $x -lt $bitmap.Width; $x += 4) {
+                    # Exclude the CSS shadow when looking for a stale native card above the DOM.
+                    if ($x -ge ($meta.panel[0] - 32) * $scale -and $x -le ($meta.panel[2] + 32) * $scale -and $y -ge ($meta.panel[1] - 32) * $scale -and $y -le ($meta.panel[3] + 32) * $scale) { continue }
+                    if ((Difference $bitmap.GetPixel($x, $y) $background.GetPixel($x, $y)) -gt 6) { $changes++ }
+                }
+            }
+            if ($changes -gt 2) { throw "Material escaped DOM card/shadow envelope: $theme/$key; $changes samples" }
+            $outsideChanges += $changes
+            if ($key -like '*-frame-*') { $frames++ }
         }
-        if ($outsideChanges -gt 2) { throw "Material escaped the visible card: $outsideChanges pixels" }
-        $results += @{ theme = $theme; transparentRoughness = $control; materialRoughness = $material; outsideChanges = $outsideChanges }
+        $edgeChanges = 0
+        foreach ($stage in 'initial', 'shrink-settled', 'grow-settled') {
+            $meta = $metadata["material-$stage"]
+            $a = $shots["material-$stage"]
+            $b = $shots["transparent-$stage"]
+            for ($y = 270; $y -lt 620; $y++) {
+                for ($x = 0; $x -lt 405; $x++) {
+                    $cx = [Math]::Clamp($x, $meta.panel[0] + 8, $meta.panel[2] - 8)
+                    $cy = [Math]::Clamp($y, $meta.panel[1] + 8, $meta.panel[3] - 8)
+                    if ([Math]::Pow($x - $cx, 2) + [Math]::Pow($y - $cy, 2) -le 100) { continue }
+                    $px = [int]($x * $scale); $py = [int]($y * $scale)
+                    if ((Difference $a.GetPixel($px, $py) $b.GetPixel($px, $py)) -gt 6) { $edgeChanges++ }
+                }
+            }
+        }
+        if ($edgeChanges -gt 2) { throw "Material escaped rounded card: $theme; $edgeChanges pixels" }
+        $results += @{ theme = $theme; transparentRoughness = $control; materialRoughness = $material; fallbackRoughness = $fallback; outsideChanges = $outsideChanges; edgeChanges = $edgeChanges; transitionFrames = $frames }
     } finally {
         foreach ($bitmap in $shots.Values) { $bitmap.Dispose() }
     }
