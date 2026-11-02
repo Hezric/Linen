@@ -105,14 +105,19 @@ test('shrinking keeps the live material inside the DOM until its smaller clip is
 
 test('growth reveals the card before extending its live material', async t=>{
   const root=panelEnvironment(t,180), panel=root.querySelector('.flyout');
-  let growing=false;
+  globalThis.document.body.classList.contains=()=>true;
+  let growing=false, frames=0;
+  globalThis.requestAnimationFrame=callback=>queueMicrotask(()=>{frames++;callback();});
   const fit=fitPanel(root,async(_,args)=>{
-    if(growing && args.height===300 && !args.settled)
+    if(growing && args.height===300 && !args.settled) {
       assert.equal(panel.style.height,'300px','card growth contains the next native brush');
+      assert.ok(frames>=2,'the larger visible card must render before the native brush grows');
+    }
     return {limit:800,backdrop:true};
   });
   await fit();
   growing=true;
+  frames=0;
   panel.scrollHeight=300;
   await fit();
   assert.equal(panel.style.height,'300px');
