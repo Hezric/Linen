@@ -6,12 +6,13 @@ use tauri::{AppHandle, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use windows::Win32::{
     Foundation::{COLORREF, HWND},
     Graphics::{
-        Dwm::DwmFlush,
+        Dwm::{DWMWA_CLOAKED, DwmFlush, DwmGetWindowAttribute},
         Gdi::{CreateRectRgn, DeleteObject, HGDIOBJ, SetWindowRgn},
     },
     UI::WindowsAndMessaging::{
-        GWL_EXSTYLE, GetWindowLongPtrW, LWA_ALPHA, SetLayeredWindowAttributes, SetWindowLongPtrW,
-        WS_EX_LAYERED,
+        GWL_EXSTYLE, GetWindowLongPtrW, HWND_TOPMOST, IsWindowVisible, LWA_ALPHA, SWP_NOACTIVATE,
+        SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW, SetLayeredWindowAttributes, SetWindowLongPtrW,
+        SetWindowPos, WS_EX_LAYERED,
     },
 };
 
@@ -69,6 +70,16 @@ fn show(window: WebviewWindow) -> Result<(), String> {
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
     let size = window.inner_size().map_err(|e| e.to_string())?;
     unsafe {
+        SetWindowPos(
+            hwnd,
+            Some(HWND_TOPMOST),
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW,
+        )
+        .map_err(|e| e.to_string())?;
         let style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
         SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style | WS_EX_LAYERED.0 as isize);
         SetLayeredWindowAttributes(hwnd, COLORREF(0), 255, LWA_ALPHA).map_err(|e| e.to_string())?;
@@ -100,8 +111,22 @@ async fn capture(window: WebviewWindow, stage: String, panel: [f64; 4]) -> Resul
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
     let hwnd = HWND(window.hwnd().map_err(|e| e.to_string())?.0);
     let layered = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) } & WS_EX_LAYERED.0 as isize != 0;
+    let visible = unsafe { IsWindowVisible(hwnd).as_bool() };
+    let mut cloaked = 0u32;
+    unsafe {
+        DwmGetWindowAttribute(
+            hwnd,
+            DWMWA_CLOAKED,
+            (&mut cloaked as *mut u32).cast(),
+            size_of_val(&cloaked) as u32,
+        )
+        .map_err(|e| e.to_string())?;
+    }
     if !background && !layered {
         return Err("Probe lost its layered host style".into());
+    }
+    if !background && (!visible || cloaked != 0) {
+        return Err(format!("Probe is not presented: visible={visible} cloaked={cloaked}"));
     }
     tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
         if background {
@@ -112,7 +137,7 @@ async fn capture(window: WebviewWindow, stage: String, panel: [f64; 4]) -> Resul
         let pending = marker.with_extension("pending");
         let ack = marker.with_extension("ack");
         std::fs::write(&pending, format!(
-            "{{\"stage\":\"{stage}\",\"layered\":{layered},\"panel\":{panel:?},\"x\":{},\"y\":{},\"width\":{},\"height\":{},\"scale\":{scale}}}",
+            "{{\"stage\":\"{stage}\",\"layered\":{layered},\"visible\":{visible},\"cloaked\":{cloaked},\"panel\":{panel:?},\"x\":{},\"y\":{},\"width\":{},\"height\":{},\"scale\":{scale}}}",
             position.x, position.y, size.width, size.height
         )).map_err(|e| e.to_string())?;
         std::fs::rename(pending, &marker).map_err(|e| e.to_string())?;
