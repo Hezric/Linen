@@ -38,4 +38,6 @@ Keep application state in consumers and pin dependencies to the GitHub tag.
 Do not launch or reconfigure a consumer while checking the library.
 ```
 
+For current-source development, use the [project build cache](docs/features/build-cache.md).
+
 [Tray shell](https://github.com/Hezric/Linen/blob/main/docs/features/tray-shell.md) · [Repository tooling](https://github.com/Hezric/Linen/blob/main/docs/features/repository-tooling.md) · [Contribute and automated tests](https://github.com/Hezric/Linen/blob/main/CONTRIBUTING.md) · [MIT license](https://github.com/Hezric/Linen/blob/main/LICENSE) · [Fluent glyph license](https://github.com/Hezric/Linen/blob/main/packages/linen-ui/glyphs/LICENSE)

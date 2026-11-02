@@ -37,4 +37,6 @@ vp run test、cargo test --locked 和 vp run build。应用状态留在使用方
 GitHub 标签。检查库时不要启动或重新配置使用方应用。
 ```
 
+开发当前源码时，请使用[项目构建缓存](docs/features/build-cache.md)。
+
 [托盘外壳](https://github.com/Hezric/Linen/blob/main/docs/features/tray-shell.md) · [仓库工具](https://github.com/Hezric/Linen/blob/main/docs/features/repository-tooling.md) · [参与贡献与自动化测试](https://github.com/Hezric/Linen/blob/main/CONTRIBUTING.md) · [MIT 许可](https://github.com/Hezric/Linen/blob/main/LICENSE) · [Fluent 图形许可](https://github.com/Hezric/Linen/blob/main/packages/linen-ui/glyphs/LICENSE)
