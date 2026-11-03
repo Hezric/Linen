@@ -2,6 +2,8 @@ mod model;
 pub use model::*;
 mod launch;
 pub use launch::relaunch_from_runtime;
+mod storage;
+pub use storage::{portable_data_directory, settings_path};
 
 #[cfg(windows)]
 mod appearance;

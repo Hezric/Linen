@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.0]
+
+### Features
+
+- support portable tray application data
+
 ## [0.2.0]
 
 ### Fixes
@@ -78,4 +84,3 @@
 
 - Correct tray toggle and dismissal races, corner placement for hidden icons,
   and native DWM shadow and rounded corners.
-

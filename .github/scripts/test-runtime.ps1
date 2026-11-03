@@ -4,6 +4,9 @@ $root = Join-Path $env:RUNNER_TEMP ('linen-runtime-' + [Guid]::NewGuid().ToStrin
 $runtime = Join-Path $root 'persist/runtime'
 New-Item -ItemType Directory -Path $runtime -Force | Out-Null
 try {
+    New-Item -ItemType Directory -Path (Join-Path $runtime 'data') | Out-Null
+    [IO.File]::WriteAllText((Join-Path $runtime 'portable'), '')
+    [IO.File]::WriteAllText((Join-Path $runtime 'data/Probe.toml'), 'retained settings')
     foreach ($version in 'one', 'two') {
         $dir = Join-Path $root $version
         New-Item -ItemType Directory -Path $dir | Out-Null
@@ -19,8 +22,9 @@ try {
                 if ([DateTime]::UtcNow -gt $deadline) { throw 'Runtime did not report its path' }
                 Start-Sleep -Milliseconds 10
             }
-            $pidText, $actual = [IO.File]::ReadAllLines($output)
+            $pidText, $actual, $settingsPath, $settings = [IO.File]::ReadAllLines($output)
             if ($actual.Replace('\\?\', '') -ine (Join-Path $runtime 'runtime_probe.exe')) { throw "Unexpected image path: $actual" }
+            if ($settingsPath.Replace('\\?\', '') -ine (Join-Path $runtime 'data/Probe.toml') -or $settings -cne 'retained settings') { throw 'Portable settings were not retained' }
             try { $child = [Diagnostics.Process]::GetProcessById([int]$pidText) } catch [ArgumentException] { $child = $null }
             if ($child) {
                 try {
@@ -31,6 +35,7 @@ try {
                 }
             }
             Write-Output "$version image path: $actual"
+            Write-Output "$version portable settings: $settingsPath"
         } finally {
             if (!$process.HasExited) { $process.Kill($true); $process.WaitForExit() }
             $process.Dispose()
