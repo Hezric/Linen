@@ -17,6 +17,19 @@ Stop the application before updating. Moving an existing versioned installation 
 this stable path creates a new identity once; the user may need to place its icon
 once more. The application never edits Windows tray preferences.
 
+An empty file named `portable` beside the running executable opts into portable
+data. `settings_path` resolves `<exe directory>/data/<App>.toml`; the shared shell
+stores WebView2 data under `data/webview`. Without the marker, settings stay in
+`%APPDATA%/<App>/<App>.toml` and WebView2 retains its default data directory. A
+directory named `data` alone does not enable portable mode. An unreadable or
+non-file marker is an error rather than a silent switch to different settings.
+Path resolution never creates or migrates files. Consumers load their own settings
+after the runtime relaunch. Scoop enables the marker inside its persisted `runtime`
+directory and copies a legacy settings file only when no portable settings exist;
+updates preserve portable data and leave the APPDATA copy in place. Login commands
+and Explorer's physical executable path stay unchanged. Consumers have no built-in
+updater; Scoop remains the update owner.
+
 Every opening uses the tray icon to select its monitor, then docks a clamped
 360-DIP flyout twelve DIP inside that monitor's work-area bottom-right corner.
 The visible outer stroke, rather than the transparent host or blurred shadow, defines

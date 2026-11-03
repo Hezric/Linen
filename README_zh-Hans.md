@@ -13,13 +13,13 @@ Linen 为小型应用提供共享基础。[Earmuff](https://github.com/Hezric/Ea
 
 ```toml
 [dependencies]
-linen-tray = { git = "https://github.com/Hezric/Linen", tag = "v0.1.5" }
+linen-tray = { git = "https://github.com/Hezric/Linen", tag = "v0.3.0" }
 ```
 
 使用 npm 12 的 Vite+ 前端，先在 `.npmrc` 设置 `allow-git=root`，再运行：
 
 ```powershell
-vp add 'linen-ui@git+https://github.com/Hezric/Linen.git#v0.1.5'
+vp add 'linen-ui@git+https://github.com/Hezric/Linen.git#v0.3.0'
 ```
 
 ```js
@@ -31,7 +31,7 @@ import { buildTray } from 'linen-ui/tooling/tray-icons.mjs';
 ## 交给智能体
 
 ```text
-克隆 https://github.com/Hezric/Linen，检出签名标签 v0.1.5，先读 AGENTS.md。
+克隆 https://github.com/Hezric/Linen，检出签名标签 v0.3.0，先读 AGENTS.md。
 准备 Vite+、稳定版 MSVC Rust 和 C++ Build Tools，运行 vp install --frozen-lockfile、
 vp run test、cargo test --locked 和 vp run build。应用状态留在使用方，依赖固定到
 GitHub 标签。检查库时不要启动或重新配置使用方应用。

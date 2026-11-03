@@ -304,7 +304,7 @@ fn create_flyout(app: &AppHandle) {
             *shared.panel.lock().unwrap() = None;
             *shared.region_height.lock().unwrap() = 0;
             let dark = crate::registry_light(w!("AppsUseLightTheme")) == 0;
-            let window =
+            let mut builder =
                 WebviewWindowBuilder::new(&app, "flyout", WebviewUrl::App("index.html".into()))
                     .title(shared.config.title)
                     .inner_size(360.0, 400.0)
@@ -320,8 +320,11 @@ fn create_flyout(app: &AppHandle) {
                     .resizable(false)
                     .skip_taskbar(true)
                     .always_on_top(true)
-                    .visible(false)
-                    .build()?;
+                    .visible(false);
+            if let Some(data) = crate::portable_data_directory(&std::env::current_exe()?)? {
+                builder = builder.data_directory(data.join("webview"));
+            }
+            let window = builder.build()?;
             style_window(&window)?;
             let handle = window.clone();
             window.on_window_event(move |event| {

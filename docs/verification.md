@@ -24,6 +24,25 @@ state changes. Inspect an already-running, authorized native application without
 changing controls, or use a separately authorized disposable Windows test environment.
 Keep production TOML, startup tasks and running/stopped state intact.
 
+Portable consumers use an empty `portable` file beside the running executable.
+Settings then live in `data/<App>.toml`, with WebView2 data in `data/webview`.
+For Scoop, these paths are under `persist/<app>/runtime`; the executable's version
+directory links to that persisted runtime. Resolve the effective file before any
+settings comparison. A portable marker does not disable audio or network writes:
+use the browser for simulated states and never start a second configured resident
+as a test. Removing the marker selects the legacy APPDATA file again.
+
+For an authorized migration, stop the exact resident, back up its entire APPDATA
+directory under system temp, and copy its settings bytes into the portable location
+only when the destination is absent. Preserve an existing portable file, including
+an invalid one. Record source/destination hashes and parsed settings, then restart
+only a previously running app through its existing startup task. Gate any configured
+network consumer against its already-connected target before restarting. Retain
+the old APPDATA directory and backup; never remove either to prove path selection.
+Compare the chosen settings, task XML, resident path and tray identity after the
+update. The hardware-free `runtime_probe`/`test-runtime.ps1` check demonstrates
+portable path selection and settings retention across two version-directory links.
+
 For hardware-independent native shell checks, Linen's `material_probe` example
 creates its own window and accepts light/dark themes without changing the desktop
 theme. Its source and frame sampler are under
