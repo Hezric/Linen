@@ -1,5 +1,17 @@
 pub type Rect = [i32; 4];
 
+pub(crate) fn outside_press(
+    point: [i32; 2],
+    panel: Option<Rect>,
+    tray: Option<Rect>,
+    left_only: bool,
+) -> bool {
+    let contains =
+        |r: Rect| point[0] >= r[0] && point[0] < r[2] && point[1] >= r[1] && point[1] < r[3];
+    // Right clicks must cancel entry before it can reclaim focus from the tray menu.
+    panel.is_some_and(|r| !contains(r)) && !(left_only && tray.is_some_and(contains))
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Edge {
     Top,
@@ -142,6 +154,23 @@ pub fn placement(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn outside_presses_leave_only_left_tray_clicks_to_the_callback() {
+        let panel = Some([100, 100, 300, 400]);
+        let tray = Some([200, 500, 240, 540]);
+        for (point, left_only, expected) in [
+            ([220, 520], false, true),
+            ([220, 520], true, false),
+            ([150, 150], true, false),
+            ([150, 150], false, false),
+            ([400, 400], true, true),
+            ([400, 400], false, true),
+        ] {
+            assert_eq!(outside_press(point, panel, tray, left_only), expected);
+        }
+        assert!(!outside_press([220, 520], None, tray, false));
+        assert!(outside_press([220, 520], panel, None, true));
+    }
     #[test]
     fn every_tray_location_uses_the_work_area_bottom_right_and_enters_from_the_right() {
         let work = [-1920, 0, 0, 1040];

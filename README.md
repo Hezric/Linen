@@ -13,13 +13,13 @@ Pin the native and frontend packages to the same signed release tag; Linen is no
 
 ```toml
 [dependencies]
-linen-tray = { git = "https://github.com/Hezric/Linen", tag = "v0.3.1" }
+linen-tray = { git = "https://github.com/Hezric/Linen", tag = "v0.3.2" }
 ```
 
 For a Vite+ frontend using npm 12, set `allow-git=root` in `.npmrc`, then run:
 
 ```powershell
-vp add 'linen-ui@git+https://github.com/Hezric/Linen.git#v0.3.1'
+vp add 'linen-ui@git+https://github.com/Hezric/Linen.git#v0.3.2'
 ```
 
 ```js
@@ -31,7 +31,7 @@ import { buildTray } from 'linen-ui/tooling/tray-icons.mjs';
 ## Use with an agent
 
 ```text
-Clone https://github.com/Hezric/Linen and check out signed tag v0.3.1.
+Clone https://github.com/Hezric/Linen and check out signed tag v0.3.2.
 Read AGENTS.md. Prepare Vite+, stable MSVC Rust and C++ Build Tools.
 Run vp install --frozen-lockfile, vp run test, cargo test --locked and vp run build.
 Keep application state in consumers and pin dependencies to the GitHub tag.

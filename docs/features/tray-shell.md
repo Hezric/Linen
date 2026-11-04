@@ -60,7 +60,8 @@ content retains its existing internal scrolling.
 
 Left-click opens a closed flyout and closes a presented flyout. Clicks during
 initialization and entry keep the pending opening; clicks during exit are consumed.
-The outside-click watcher excludes the tray icon so its callback owns tray input.
+The outside-click watcher leaves only left tray presses to the toggle callback.
+Right tray presses cancel a pending entry so it cannot reclaim focus from the menu.
 Burst results depend on presentation timing: clicks before presentation keep it open,
 and the first click after presentation closes it. Focus loss, clicks outside its bounds,
 Escape and close dismiss it and destroy the webview after the exit animation.
