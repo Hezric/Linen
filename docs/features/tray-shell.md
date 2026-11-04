@@ -58,7 +58,11 @@ in without a cloned outgoing page. Ordinary panel content stays free of transien
 outer scrollbars. Work-area limits keep the footer reachable; genuinely constrained
 content retains its existing internal scrolling.
 
-Left-click toggles the flyout. Focus loss, mouse clicks outside its bounds,
+Left-click opens a closed flyout and closes a presented flyout. Clicks during
+initialization and entry keep the pending opening; clicks during exit are consumed.
+The outside-click watcher excludes the tray icon so its callback owns tray input.
+Burst results depend on presentation timing: clicks before presentation keep it open,
+and the first click after presentation closes it. Focus loss, clicks outside its bounds,
 Escape and close dismiss it and destroy the webview after the exit animation.
 A focus-loss hide consumes a tray click within 300 ms, preventing hide/reopen
 races. Opening and closing are serialized; initialization focus events cannot

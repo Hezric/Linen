@@ -809,7 +809,21 @@ pub async fn present_flyout(app: AppHandle) -> Result<(), String> {
                                     || point.y >= origin.y + bounds[3]
                             })
                         {
-                            dismiss(&watch_app, true);
+                            // The tray callback owns this click, including clicks during entry.
+                            let over_tray = watch_app
+                                .tray_by_id(shared.config.id)
+                                .and_then(|tray| tray.rect().ok().flatten())
+                                .is_some_and(|rect| {
+                                    let p = rect.position.to_physical::<i32>(1.0);
+                                    let s = rect.size.to_physical::<i32>(1.0);
+                                    point.x >= p.x
+                                        && point.x < p.x + s.width
+                                        && point.y >= p.y
+                                        && point.y < p.y + s.height
+                                });
+                            if !over_tray {
+                                dismiss(&watch_app, true);
+                            }
                         }
                     }
                 }
