@@ -1,3 +1,4 @@
+use crate::model::outside_press;
 use crate::{
     Appearance, Edge, Lifecycle, Phase, Placement, Rect, dock_work_area, icon_index, placement,
 };
@@ -786,15 +787,19 @@ pub async fn present_flyout(app: AppHandle) -> Result<(), String> {
             };
             let hwnd = HWND(handle.0);
             let pressed = || unsafe {
-                GetAsyncKeyState(VK_LBUTTON.0 as i32) < 0
-                    || GetAsyncKeyState(VK_RBUTTON.0 as i32) < 0
+                (
+                    GetAsyncKeyState(VK_LBUTTON.0 as i32) < 0,
+                    GetAsyncKeyState(VK_RBUTTON.0 as i32) < 0,
+                )
             };
-            let mut down = pressed();
+            let initial = pressed();
+            let mut down = initial.0 || initial.1;
             while matches!(
                 shared.state.lock().unwrap().phase,
                 Phase::Opening | Phase::Open
             ) {
-                let current = pressed();
+                let (left, right) = pressed();
+                let current = left || right;
                 if current && !down {
                     let mut point = POINT::default();
                     let mut origin = POINT::default();
@@ -802,26 +807,24 @@ pub async fn present_flyout(app: AppHandle) -> Result<(), String> {
                     unsafe {
                         if GetCursorPos(&mut point).is_ok()
                             && ClientToScreen(hwnd, &mut origin).as_bool()
-                            && panel.is_some_and(|bounds| {
-                                point.x < origin.x + bounds[0]
-                                    || point.x >= origin.x + bounds[2]
-                                    || point.y < origin.y + bounds[1]
-                                    || point.y >= origin.y + bounds[3]
-                            })
                         {
-                            // The tray callback owns this click, including clicks during entry.
-                            let over_tray = watch_app
+                            let panel = panel.map(|r| {
+                                [
+                                    origin.x + r[0],
+                                    origin.y + r[1],
+                                    origin.x + r[2],
+                                    origin.y + r[3],
+                                ]
+                            });
+                            let tray = watch_app
                                 .tray_by_id(shared.config.id)
                                 .and_then(|tray| tray.rect().ok().flatten())
-                                .is_some_and(|rect| {
+                                .map(|rect| {
                                     let p = rect.position.to_physical::<i32>(1.0);
                                     let s = rect.size.to_physical::<i32>(1.0);
-                                    point.x >= p.x
-                                        && point.x < p.x + s.width
-                                        && point.y >= p.y
-                                        && point.y < p.y + s.height
+                                    [p.x, p.y, p.x + s.width, p.y + s.height]
                                 });
-                            if !over_tray {
+                            if outside_press([point.x, point.y], panel, tray, left && !right) {
                                 dismiss(&watch_app, true);
                             }
                         }
