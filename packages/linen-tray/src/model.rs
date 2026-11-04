@@ -40,7 +40,7 @@ impl Lifecycle {
         true
     }
     pub fn toggle(&mut self, now: u64) -> Phase {
-        if matches!(self.phase, Phase::Opening | Phase::Open) {
+        if self.phase == Phase::Open {
             self.phase = Phase::Closing;
         } else if self.phase == Phase::Closing {
             // Consume this click while the focus-loss exit animation is still running.
@@ -227,6 +227,60 @@ mod tests {
             work
         );
         assert_eq!(dock_work_area(full, work, [0, 0, 0, 0], Edge::Bottom), work);
+    }
+    #[test]
+    fn opening_click_bursts_do_not_cancel_presentation() {
+        for interval in [1, 50, 100] {
+            for clicks in 1..=3 {
+                let mut state = Lifecycle::default();
+                for click in 0..clicks {
+                    assert_eq!(state.toggle(click * interval), Phase::Opening);
+                }
+                assert!(state.present());
+                assert_eq!(state.phase, Phase::Open);
+            }
+        }
+    }
+    #[test]
+    fn tray_bursts_follow_presentation_and_exit_instead_of_click_parity() {
+        // A 250-ms entry: the fourth 100-ms click arrives after presentation.
+        for (interval, expected) in [
+            (1, [Phase::Open, Phase::Open, Phase::Open, Phase::Open]),
+            (50, [Phase::Open, Phase::Open, Phase::Open, Phase::Open]),
+            (100, [Phase::Open, Phase::Open, Phase::Open, Phase::Closing]),
+            (
+                300,
+                [Phase::Open, Phase::Closing, Phase::Open, Phase::Closing],
+            ),
+        ] {
+            for clicks in 1..=4 {
+                let mut state = Lifecycle::default();
+                let mut transition = 0;
+                for click in 0..clicks {
+                    let now = click as u64 * interval;
+                    if now >= transition + 250 {
+                        if state.phase == Phase::Opening {
+                            assert!(state.present());
+                        } else if state.phase == Phase::Closing {
+                            state.phase = Phase::Closed;
+                        }
+                    }
+                    let previous = state.phase;
+                    state.toggle(now);
+                    if state.phase != previous {
+                        transition = now;
+                    }
+                }
+                if state.phase == Phase::Opening {
+                    assert!(state.present());
+                }
+                assert_eq!(
+                    state.phase,
+                    expected[clicks - 1],
+                    "{clicks} at {interval} ms"
+                );
+            }
+        }
     }
     #[test]
     fn cancelled_presentation_cannot_reopen_a_closing_flyout() {

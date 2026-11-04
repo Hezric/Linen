@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.1]
+
+### Fixes
+
+- preserve flyout entry during rapid clicks
+
 ## [0.3.0]
 
 ### Features
