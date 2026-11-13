@@ -14,7 +14,7 @@
     "build": "vp build"
   },
   "devDependencies": {
-    "vite-plus": "1.4.0"
+    "vite-plus": "1.5.1"
   },
   "devEngines": {
     "runtime": {
